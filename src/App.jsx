@@ -1,122 +1,222 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useCallback } from 'react';
+import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
+import { generateTaskBreakdown } from './services/aiService';
+import { getSettings } from './services/storageService';
+import Header from './components/Header';
+import HomeScreen from './components/HomeScreen';
+import TaskBreakdown from './components/TaskBreakdown';
+import FocusSession from './components/FocusSession';
+import DriftIntervention from './components/DriftIntervention';
+import ContextRecovery from './components/ContextRecovery';
+import SessionComplete from './components/SessionComplete';
+import SessionHistory from './components/SessionHistory';
+import Settings from './components/Settings';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const session = useSessionManager();
+
+  // Apply theme on mount
+  useEffect(() => {
+    const settings = getSettings();
+    if (settings.theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (settings.theme === 'system') {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    }
+  }, []);
+
+  // Handle starting a new task -> immediate breakdown
+  const handleStartTask = useCallback(async (taskText, duration = 20) => {
+    session.startNewTask(taskText, duration);
+
+    try {
+      const result = await generateTaskBreakdown(taskText, { duration });
+      const steps = (result.steps || []).map(step => ({
+        ...step,
+        completed: false,
+      }));
+      session.setBreakdownSteps(steps);
+    } catch (error) {
+      console.error('Failed to generate breakdown:', error);
+      session.setBreakdownSteps([
+        { title: taskText, description: 'Work on this task', estimatedMinutes: duration, completed: false },
+      ]);
+    }
+  }, [session]);
+
+  // Handle step completion
+  const handleCompleteStep = useCallback(() => {
+    session.completeStep();
+  }, [session]);
+
+  // Handle drift -> show intervention
+  const handleDrift = useCallback((count, driftData) => {
+    session.triggerDrift(count, driftData);
+  }, [session]);
+
+  // Handle continue from drift
+  const handleContinueFromDrift = useCallback(() => {
+    session.continueFromDrift();
+  }, [session]);
+
+  // Handle "where was I?" from drift or focus
+  const handleWhereWasI = useCallback(() => {
+    session.showContextRecovery();
+  }, [session]);
+
+  // Handle continue from context recovery
+  const handleContinueFromContext = useCallback(() => {
+    session.resumeSession();
+  }, [session]);
+
+  // Handle reset from context recovery
+  const handleResetFromContext = useCallback(() => {
+    session.startFocus();
+  }, [session]);
+
+  // Handle end session
+  const handleEndSession = useCallback((elapsedSeconds) => {
+    session.endSession(elapsedSeconds);
+  }, [session]);
+
+  // Handle starting focus from breakdown
+  const handleStartFocus = useCallback(() => {
+    session.startFocus();
+  }, [session]);
+
+  // Handle starting next session from adaptive recommendation
+  const handleStartNextSession = useCallback((recommendedDuration) => {
+    session.startFocus(recommendedDuration);
+  }, [session]);
+
+  // Logo click -> go home
+  const handleLogoClick = useCallback(() => {
+    if (
+      session.view === SESSION_STATES.FOCUS ||
+      session.view === SESSION_STATES.PAUSED
+    ) {
+      session.persistState();
+    }
+    session.goHome();
+  }, [session]);
+
+  // Render current view
+  const renderView = () => {
+    switch (session.view) {
+      case SESSION_STATES.IDLE:
+        return (
+          <HomeScreen
+            onStartTask={handleStartTask}
+            onContinueSession={session.continueLastSession}
+          />
+        );
+
+      case SESSION_STATES.BREAKDOWN:
+        return (
+          <TaskBreakdown
+            task={session.task}
+            steps={session.steps}
+            isLoading={session.isLoading}
+            onStartFocus={handleStartFocus}
+            onBack={() => session.goHome()}
+            onUpdateSteps={(newSteps) => session.setBreakdownSteps(newSteps)}
+          />
+        );
+
+      case SESSION_STATES.FOCUS:
+      case SESSION_STATES.PAUSED:
+        return (
+          <FocusSession
+            task={session.task}
+            steps={session.steps}
+            currentStepIndex={session.currentStepIndex}
+            sessionDuration={session.sessionDuration}
+            onCompleteStep={handleCompleteStep}
+            onEndSession={handleEndSession}
+            onPause={session.pauseSession}
+            onResume={session.resumeSession}
+            onDrift={handleDrift}
+            onWhereWasI={handleWhereWasI}
+            isPaused={session.view === SESSION_STATES.PAUSED}
+            interruptionCount={session.interruptionCount}
+          />
+        );
+
+      case SESSION_STATES.DRIFT:
+        return (
+          <DriftIntervention
+            task={session.task}
+            currentStep={session.steps[session.currentStepIndex]}
+            driftData={session.lastDriftData || { duration: 0 }}
+            onContinue={handleContinueFromDrift}
+            onTakeBreak={() => {
+              session.pauseSession();
+              handleContinueFromDrift();
+            }}
+            onChangeTask={() => session.goHome()}
+            onWhereWasI={handleWhereWasI}
+          />
+        );
+
+      case SESSION_STATES.CONTEXT_RECOVERY:
+        return (
+          <ContextRecovery
+            task={session.task}
+            steps={session.steps}
+            currentStepIndex={session.currentStepIndex}
+            interruptionDuration={session.lastDriftData?.duration || 0}
+            onContinue={handleContinueFromContext}
+            onReset={handleResetFromContext}
+            onGoHome={() => session.goHome()}
+          />
+        );
+
+      case SESSION_STATES.COMPLETED:
+        return (
+          <SessionComplete
+            task={session.task}
+            steps={session.steps}
+            currentStepIndex={session.currentStepIndex}
+            completedSteps={session.completedSteps}
+            elapsedSeconds={session.elapsedSeconds}
+            interruptionCount={session.interruptionCount}
+            onSaveReflection={session.saveReflection}
+            onStartNextSession={handleStartNextSession}
+            onGoHome={() => session.goHome()}
+          />
+        );
+
+      case SESSION_STATES.HISTORY:
+        return <SessionHistory onBack={() => session.goHome()} />;
+
+      case SESSION_STATES.SETTINGS:
+        return <Settings onBack={() => session.goHome()} />;
+
+      default:
+        return (
+          <HomeScreen
+            onStartTask={handleStartTask}
+            onContinueSession={session.continueLastSession}
+          />
+        );
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <div className="app-container">
+      <Header
+        onLogoClick={handleLogoClick}
+        onHistoryClick={session.showHistory}
+        onSettingsClick={session.showSettings}
+      />
+      <main className="main-content">
+        {renderView()}
+      </main>
+    </div>
+  );
 }
 
-export default App
+export default App;
