@@ -4,6 +4,8 @@ This template provides a minimal setup to get React working in Vite with HMR and
 > **Get back to what matters.**  
 > An ADHD-friendly focus companion designed around **gentle context recovery** instead of punishment.
 
+Official website: [focus-loop.tech](https://www.focus-loop.tech)
+
 Currently, two official plugins are available:
 ---
 
