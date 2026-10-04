@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTimer } from '../hooks/useTimer';
 import { useDriftDetection } from '../hooks/useDriftDetection';
-import { generateNextAction } from '../services/aiService';
+import { getLocalNextAction } from '../algorithms/studyEngine';
 
 export default function FocusSession({
   task,
@@ -59,17 +59,16 @@ export default function FocusSession({
     }
   }, [isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleNeedHelp = async () => {
+  const handleNeedHelp = () => {
     setShowHelp(true);
     setHelpLoading(true);
-    try {
-      const result = await generateNextAction(task, steps, currentStepIndex);
-      setHelpText(result.nextAction);
-    } catch {
-      setHelpText(`Focus on: ${currentStep?.title || 'the current step'}`);
-    } finally {
+    if (currentStep?.nextAction) {
+      setHelpText(currentStep.nextAction);
       setHelpLoading(false);
+      return;
     }
+    setHelpText(getLocalNextAction(currentStep));
+    setHelpLoading(false);
   };
 
   const handlePauseResume = () => {

@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
 import { generateTaskBreakdown } from './services/aiService';
+import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
 import { getSettings } from './services/storageService';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
@@ -45,6 +46,18 @@ function App() {
         { title: taskText, description: 'Work on this task', estimatedMinutes: duration, completed: false },
       ]);
     }
+  }, [session]);
+
+  const handleStartMaterial = useCallback((materialText, duration = 20) => {
+    const plan = buildStudyPlan(materialText, { sessionMinutes: duration });
+    const steps = plan.topics.map(topicToStep);
+    session.startNewTask('Study imported material', duration);
+    session.setBreakdownSteps(steps.length > 0 ? steps : [{
+      title: 'Review imported material',
+      description: 'Read the material and identify the first concept to study.',
+      estimatedMinutes: duration,
+      completed: false,
+    }]);
   }, [session]);
 
   // Handle step completion
@@ -110,6 +123,7 @@ function App() {
         return (
           <HomeScreen
             onStartTask={handleStartTask}
+            onStartMaterial={handleStartMaterial}
             onContinueSession={session.continueLastSession}
           />
         );
@@ -119,6 +133,7 @@ function App() {
           <TaskBreakdown
             task={session.task}
             steps={session.steps}
+            sessionDuration={session.sessionDuration}
             isLoading={session.isLoading}
             onStartFocus={handleStartFocus}
             onBack={() => session.goHome()}
@@ -199,6 +214,7 @@ function App() {
         return (
           <HomeScreen
             onStartTask={handleStartTask}
+            onStartMaterial={handleStartMaterial}
             onContinueSession={session.continueLastSession}
           />
         );

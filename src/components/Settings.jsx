@@ -160,13 +160,32 @@ export default function Settings({ onBack }) {
         <h3 className="heading-3" style={{ marginBottom: 'var(--space-4)' }}>AI Status</h3>
         <div className="settings-row">
           <div>
+            <div className="settings-label">AI enhancements</div>
+            <div className="text-sm text-tertiary">Keep disabled to use local algorithms only</div>
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={settings.aiEnabled}
+              onChange={(e) => updateSetting('aiEnabled', e.target.checked)}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+        <div className="settings-row">
+          <div>
             <div className="settings-label">Mode</div>
           </div>
-          <span className={`badge ${aiStatus?.aiAvailable ? 'badge-accent' : 'badge-warning'}`}>
-            {aiStatus?.aiAvailable ? '🤖 AI Connected' : aiStatus?.status === 'unavailable' ? '📡 Server Offline' : '🎯 Demo Mode'}
+          <span className={`badge ${settings.aiEnabled && aiStatus?.aiAvailable ? 'badge-accent' : 'badge-warning'}`}>
+            {!settings.aiEnabled ? '🔒 Local Mode' : aiStatus?.aiAvailable ? '🤖 AI Connected' : aiStatus?.status === 'unavailable' ? '📡 Server Offline' : '🎯 Demo Mode'}
           </span>
         </div>
-        {!aiStatus?.aiAvailable && (
+        {!settings.aiEnabled && (
+          <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
+            Local mode is active. Study plans, focus sessions, and review tools do not use an external AI provider.
+          </p>
+        )}
+        {settings.aiEnabled && !aiStatus?.aiAvailable && (
           <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
             AI features are using demo responses. Add an ANTHROPIC_API_KEY to the server .env to enable real AI.
           </p>

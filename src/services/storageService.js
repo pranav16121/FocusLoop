@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS = {
   theme: 'system', // 'light', 'dark', 'system'
   gentleInterventions: true,
   showStreak: true,
+  aiEnabled: false,
 };
 
 export function getSettings() {

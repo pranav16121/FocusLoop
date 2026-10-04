@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask } from '../services/storageService';
 import { formatDate, formatMinutes } from '../utils/formatTime';
+import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 
 const DURATION_PRESETS = [10, 15, 20, 25, 30, 45];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onContinueSession }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onContinueSession }) {
   const [taskInput, setTaskInput] = useState('');
+  const [materialInput, setMaterialInput] = useState('');
+  const [inputMode, setInputMode] = useState('task');
   const [duration, setDuration] = useState(() => getSettings().focusDuration || 20);
   const [savedTask, setSavedTask] = useState(() => getCurrentTask());
   const [recentSessions] = useState(() => getSessionHistory().slice(-3).reverse());
@@ -16,6 +19,14 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
     const trimmed = taskInput.trim();
     if (trimmed) {
       onStartTask(trimmed, duration);
+    }
+  };
+
+  const handleMaterialSubmit = (e) => {
+    e.preventDefault();
+    const trimmed = materialInput.trim();
+    if (trimmed && onStartMaterial) {
+      onStartMaterial(trimmed, duration);
     }
   };
 
@@ -69,7 +80,45 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="welcome-input-area">
+      <form onSubmit={inputMode === 'task' ? handleSubmit : handleMaterialSubmit} className="welcome-input-area">
+        <div className="chip-group" style={{ justifyContent: 'center', marginBottom: 'var(--space-4)' }} role="tablist" aria-label="Choose a starting point">
+          <button
+            type="button"
+            className={`chip ${inputMode === 'task' ? 'selected' : ''}`}
+            onClick={() => setInputMode('task')}
+            role="tab"
+            aria-selected={inputMode === 'task'}
+          >
+            Start with a task
+          </button>
+          <button
+            type="button"
+            className={`chip ${inputMode === 'material' ? 'selected' : ''}`}
+            onClick={() => setInputMode('material')}
+            role="tab"
+            aria-selected={inputMode === 'material'}
+          >
+            Study pasted material
+          </button>
+        </div>
+
+        {inputMode === 'material' ? (
+          <>
+            <textarea
+              className="text-input text-input-lg"
+              placeholder="Paste notes, a chapter, or a syllabus here..."
+              value={materialInput}
+              onChange={(e) => setMaterialInput(e.target.value)}
+              aria-label="Study material"
+              rows={7}
+              maxLength={MAX_SOURCE_LENGTH}
+              style={{ resize: 'vertical', minHeight: '150px' }}
+            />
+            <p className="text-sm text-tertiary" style={{ textAlign: 'left', marginTop: 'var(--space-2)' }}>
+              Processed locally in your browser. Nothing is uploaded. {materialInput.length.toLocaleString()} / {MAX_SOURCE_LENGTH.toLocaleString()} characters
+            </p>
+          </>
+        ) : (
         <div className="input-group">
           <input
             type="text"
@@ -81,9 +130,10 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
             autoFocus
           />
         </div>
+        )}
 
         {/* Quick Demo Pill */}
-        {!taskInput && (
+        {inputMode === 'task' && !taskInput && (
           <div style={{ marginTop: 'var(--space-2)', textAlign: 'left' }}>
             <button
               type="button"
@@ -120,10 +170,10 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
         <button
           type="submit"
           className="btn btn-primary btn-lg btn-block"
-          disabled={!taskInput.trim()}
+          disabled={inputMode === 'task' ? !taskInput.trim() : !materialInput.trim()}
           style={{ marginTop: 'var(--space-6)' }}
         >
-          Start Focus
+          {inputMode === 'task' ? 'Start Focus' : 'Build Study Plan'}
         </button>
       </form>
 

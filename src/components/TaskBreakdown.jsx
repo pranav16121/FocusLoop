@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { packSessions } from '../algorithms/studyEngine';
 
-export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, onBack, onUpdateSteps }) {
+export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps }) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editValue, setEditValue] = useState('');
@@ -54,6 +55,16 @@ export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, on
   };
 
   const allRevealed = revealedCount >= steps.length;
+  const estimatedMinutes = steps.reduce((total, step) => total + (step.estimatedMinutes || 0), 0);
+  const estimatedSessions = sessionDuration > 0 ? Math.max(1, Math.ceil(estimatedMinutes / sessionDuration)) : 1;
+  const packedSessions = packSessions(steps.map((step, index) => ({
+    ...step,
+    id: step.topicId || `step-${index}`,
+  })), sessionDuration || 20);
+  const sessionByStep = new Map();
+  packedSessions.forEach((packedSession, sessionIndex) => {
+    packedSession.topics.forEach(stepId => sessionByStep.set(stepId, sessionIndex + 1));
+  });
 
   return (
     <div className="animate-slide-up" style={{ padding: 'var(--space-6) 0', maxWidth: '540px', margin: '0 auto' }}>
@@ -62,6 +73,15 @@ export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, on
       <p className="text-center text-secondary" style={{ marginBottom: 'var(--space-6)' }}>
         Let's make this smaller. One small step at a time.
       </p>
+
+      {!isLoading && steps.length > 0 && (
+        <div className="text-center" style={{ marginBottom: 'var(--space-4)' }}>
+          <span className="badge badge-accent">Local study plan</span>
+          <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
+            About {estimatedMinutes} minutes across {estimatedSessions} {estimatedSessions === 1 ? 'session' : 'sessions'}
+          </p>
+        </div>
+      )}
 
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
@@ -85,8 +105,14 @@ export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, on
                   opacity: index < revealedCount ? 1 : 0,
                   transform: index < revealedCount ? 'translateX(0)' : 'translateX(-10px)',
                   transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  position: 'relative',
                 }}
               >
+                {index === 0 || sessionByStep.get(step.topicId || `step-${index}`) !== sessionByStep.get(steps[index - 1]?.topicId || `step-${index - 1}`) ? (
+                  <div className="text-sm" style={{ position: 'absolute', top: 'calc(-1 * var(--space-3))', left: 0, color: 'var(--color-accent)', fontWeight: 600 }}>
+                    Session {sessionByStep.get(step.topicId || `step-${index}`)}
+                  </div>
+                ) : null}
                 <div className="step-checkbox" aria-hidden="true">
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
                     {index + 1}
@@ -110,6 +136,11 @@ export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, on
                     <>
                       <div className="step-title">{step.title}</div>
                       {step.description && <div className="step-description">{step.description}</div>}
+                      {step.nextAction && (
+                        <div className="step-description" style={{ color: 'var(--color-accent)', marginTop: 'var(--space-1)' }}>
+                          Next action: {step.nextAction}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

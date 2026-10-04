@@ -1,9 +1,12 @@
 // AI Service - abstraction layer for all AI operations
 // The UI interacts with AI through this module, with seamless server API and offline fallbacks
+import { getSettings } from './storageService';
 
 const API_BASE = '/api/ai';
 
 async function fetchAPI(endpoint, data) {
+  if (!getSettings().aiEnabled) return null;
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
