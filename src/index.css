@@ -684,6 +684,152 @@ textarea.text-input {
   text-align: left;
 }
 
+.plan-container {
+  padding: var(--space-6) 0;
+  max-width: 620px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.plan-intro {
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.plan-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.plan-loading {
+  text-align: center;
+  padding: var(--space-10);
+}
+
+.plan-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.plan-session-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+}
+
+.plan-session-header,
+.plan-session-meta,
+.plan-session-actions,
+.plan-topic-indicators {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.plan-session-header {
+  justify-content: space-between;
+}
+
+.plan-session-name {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 700;
+  padding: var(--space-1) 0;
+}
+
+.plan-session-name:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.plan-session-length {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.plan-session-length input {
+  width: 52px;
+  margin: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: var(--space-1);
+  text-align: center;
+}
+
+.plan-session-meta {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  margin: var(--space-1) 0 var(--space-3);
+}
+
+.plan-topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plan-topic {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+}
+
+.plan-topic-drag {
+  color: var(--color-text-tertiary);
+  cursor: grab;
+  letter-spacing: -0.15em;
+  padding-top: 2px;
+}
+
+.plan-topic-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.plan-topic-title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plan-topic-description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-1);
+}
+
+.plan-topic-indicators {
+  margin-top: var(--space-2);
+}
+
+.plan-session-actions {
+  margin-top: var(--space-3);
+}
+
+.plan-add-topic,
+.plan-start-area {
+  margin-top: var(--space-5);
+}
+
+.plan-start-area {
+  text-align: center;
+}
+
 .material-options .text-input {
   margin-top: var(--space-1);
   padding: var(--space-2) var(--space-3);
