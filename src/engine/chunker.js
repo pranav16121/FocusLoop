@@ -100,7 +100,7 @@ export function createTopics(text, options = {}) {
       depth: section.depth,
       estimatedMinutes: estimateMinutes(section.text, complexity, readingSpeed),
       complexity,
-      importance: scoreImportance(section, allText),
+      importance: scoreImportance(section, `${allText} ${options.syllabusText || ''}`),
       confidence: section.title === `Section ${index + 1}` ? 0.55 : 0.8,
       status: 'UNSEEN',
     };

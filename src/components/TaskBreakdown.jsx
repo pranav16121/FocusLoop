@@ -44,6 +44,10 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
     }
   }, [isLoading, steps.length]);
 
+  useEffect(() => {
+    if (groups.length === 0 && steps.length > 0) setGroups(buildGroups(steps, sessionDuration));
+  }, [groups.length, sessionDuration, steps]);
+
   const updateGroups = (nextGroups) => {
     setGroups(nextGroups.filter(group => group.topicIds.length > 0));
   };

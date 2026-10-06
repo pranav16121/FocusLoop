@@ -8,8 +8,11 @@ import {
   clearCurrentTask, 
   addSessionToHistory,
   getSessionDefaults,
+  getRevisionSchedule,
+  saveRevisionSchedule,
 } from '../services/storageService';
 import { generateRecallCards, rateRecallCard } from '../engine/recall';
+import { scheduleNextReview } from '../engine/revision';
 
 export const SESSION_STATES = {
   IDLE: 'idle',
@@ -210,6 +213,13 @@ export function useSessionManager() {
 
   const rateRecall = useCallback((cardId, rating) => {
     const nextCards = recallCards.map(card => card.id === cardId ? rateRecallCard(card, rating) : card);
+    const ratedCard = nextCards.find(card => card.id === cardId);
+    if (ratedCard) {
+      const schedule = getRevisionSchedule();
+      const scheduledCard = scheduleNextReview(schedule.find(card => card.id === cardId) || ratedCard, rating);
+      const nextSchedule = [...schedule.filter(card => card.id !== cardId), scheduledCard];
+      saveRevisionSchedule(nextSchedule);
+    }
     setRecallCards(nextCards);
     persistState(undefined, { recallCards: nextCards });
   }, [recallCards, persistState]);
