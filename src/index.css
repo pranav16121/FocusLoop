@@ -921,6 +921,13 @@ textarea.text-input {
   margin-bottom: var(--space-3);
 }
 
+.home-plan-card {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: var(--space-4);
+  text-align: left;
+}
+
 .plan-start-area {
   text-align: center;
 }

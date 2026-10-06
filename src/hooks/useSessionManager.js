@@ -23,6 +23,7 @@ export const SESSION_STATES = {
   COMPLETED: 'completed',
   REFLECTION: 'reflection',
   RECALL: 'recall',
+  REVISION: 'revision',
   ADAPTIVE: 'adaptive',
   HISTORY: 'history',
   SETTINGS: 'settings',

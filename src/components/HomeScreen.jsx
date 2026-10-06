@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask } from '../services/storageService';
+import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask, getRevisionSchedule } from '../services/storageService';
+import { getDueReviews } from '../engine/revision';
 import { formatDate, formatMinutes } from '../utils/formatTime';
 import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 
 const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession, onStartRevision }) {
   const [taskInput, setTaskInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
@@ -19,6 +20,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
   const [savedTask, setSavedTask] = useState(() => getCurrentTask());
   const [recentSessions] = useState(() => getSessionHistory().slice(-3).reverse());
   const [fileError, setFileError] = useState('');
+  const dueReviews = getDueReviews(getRevisionSchedule());
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -107,6 +109,14 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
           <div className="continue-meta">
             {savedTask.completedSteps || 0} of {savedTask.steps?.length || 0} steps completed · Click to resume
           </div>
+        </div>
+      )}
+
+      {dueReviews.length > 0 && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Due for revision</div>
+          <div className="continue-task">{dueReviews.length} concept{dueReviews.length === 1 ? '' : 's'} ready today</div>
+          <button className="btn btn-primary btn-sm" onClick={() => onStartRevision(dueReviews)}>Start revision</button>
         </div>
       )}
 

@@ -7,6 +7,7 @@ const KEYS = {
   CURRENT_SESSION: 'focusloop_current_session',
   SESSION_HISTORY: 'focusloop_session_history',
   CURRENT_TASK: 'focusloop_current_task',
+  REVISION_SCHEDULE: 'focusloop_revision_schedule',
 };
 
 function isStorageAvailable() {
@@ -138,6 +139,7 @@ function migrateV2ToV3() {
   if (currentSession) saveCurrentSession(migrateRecord(currentSession));
   const history = safeGet(KEYS.SESSION_HISTORY, []);
   if (Array.isArray(history)) safeSet(KEYS.SESSION_HISTORY, history.map(migrateRecord));
+  if (!Array.isArray(safeGet(KEYS.REVISION_SCHEDULE, null))) safeSet(KEYS.REVISION_SCHEDULE, []);
 }
 
 function migrateStorage() {
@@ -225,6 +227,14 @@ export function getSessionDefaults(session = {}) {
 export function clearCurrentSession() {
   if (!isStorageAvailable()) return;
   try { localStorage.removeItem(KEYS.CURRENT_SESSION); } catch {}
+}
+
+export function getRevisionSchedule() {
+  return safeGet(KEYS.REVISION_SCHEDULE, []);
+}
+
+export function saveRevisionSchedule(schedule) {
+  return safeSet(KEYS.REVISION_SCHEDULE, schedule);
 }
 
 // Session History

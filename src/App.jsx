@@ -14,6 +14,9 @@ import SessionComplete from './components/SessionComplete';
 import SessionHistory from './components/SessionHistory';
 import Settings from './components/Settings';
 import RecallReview from './components/RecallReview';
+import RevisionQueue from './components/RevisionQueue';
+import { getRevisionSchedule, saveRevisionSchedule } from './services/storageService';
+import { getDueReviews } from './engine/revision';
 
 function App() {
   const session = useSessionManager();
@@ -109,6 +112,10 @@ function App() {
     session.startFocus();
   }, [session]);
 
+  const handleStartRevision = useCallback(() => {
+    session.setView(SESSION_STATES.REVISION);
+  }, [session]);
+
   // Handle starting next session from adaptive recommendation
   const handleStartNextSession = useCallback((recommendedDuration) => {
     session.startFocus(recommendedDuration);
@@ -135,6 +142,7 @@ function App() {
             onStartMaterial={handleStartMaterial}
             onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
+            onStartRevision={handleStartRevision}
           />
         );
 
@@ -185,6 +193,15 @@ function App() {
             cards={session.recallCards}
             onRate={session.rateRecall}
             onFinish={session.finishRecall}
+          />
+        );
+
+      case SESSION_STATES.REVISION:
+        return (
+          <RevisionQueue
+            schedule={getDueReviews(getRevisionSchedule())}
+            onUpdate={saveRevisionSchedule}
+            onBack={() => session.goHome()}
           />
         );
 
@@ -251,6 +268,7 @@ function App() {
             onStartMaterial={handleStartMaterial}
             onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
+            onStartRevision={handleStartRevision}
           />
         );
     }
