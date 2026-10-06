@@ -10,6 +10,8 @@ export default function ContextRecovery({
   onContinue,
   onReset,
   onGoHome,
+  latestSnapshot,
+  nextAction,
 }) {
   const [contextData, setContextData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function ContextRecovery({
         <h2 className="heading-2">Here's where you left off</h2>
         {interruptionDuration > 0 ? (
           <p className="text-secondary" style={{ marginTop: 'var(--space-2)' }}>
-            You stepped away for {formatRelativeTime(interruptionDuration)}. Zero worries — let's re-anchor.
+            You were away for about {formatRelativeTime(interruptionDuration)}. Ready to continue?
           </p>
         ) : (
           <p className="text-secondary" style={{ marginTop: 'var(--space-2)' }}>
@@ -80,16 +82,24 @@ export default function ContextRecovery({
             <p className="text-sm text-secondary" style={{ marginTop: 'var(--space-1)' }}>{currentStep.description}</p>
           )}
 
-          {contextData?.nextAction && (
+          {(nextAction || contextData?.nextAction) && (
             <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', background: 'var(--color-bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
               <p className="text-sm text-tertiary" style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: 'var(--font-size-xs)' }}>
                 Next immediate action
               </p>
               <p style={{ fontWeight: 500, color: 'var(--color-text)', marginTop: '2px' }}>
-                {contextData.nextAction}
+                {nextAction || contextData.nextAction}
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {latestSnapshot && (
+        <div className="card card-accent" style={{ marginBottom: 'var(--space-3)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-accent)', fontWeight: 600, marginBottom: 'var(--space-1)' }}>Your latest snapshot</p>
+          <p style={{ color: 'var(--color-text)' }}>{latestSnapshot.text}</p>
+          <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>From this focus session</p>
         </div>
       )}
 

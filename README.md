@@ -2,7 +2,7 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 > **Get back to what matters.**  
-> An ADHD-friendly focus companion designed around **gentle context recovery** instead of punishment.
+> A calm focus companion designed around **gentle context recovery** instead of punishment.
 
 Official website: [focus-loop.tech](https://www.focus-loop.tech)
 
@@ -14,7 +14,7 @@ Currently, two official plugins are available:
 ## 💡 The Core Problem & Philosophy
 
 ## React Compiler
-People with ADHD often know exactly what they need to do, but during a work session they lose focus, switch tabs, get distracted, or lose their working memory of what they were just doing.
+People can know exactly what they need to do, yet still lose their working context during a work session.
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 Traditional productivity tools punish distraction with red streaks, guilt-inducing alerts ("You failed!", "You got distracted again"), or rigid Pomodoro timers.
@@ -75,6 +75,12 @@ npm install
 ### 2. Environment Configuration (Optional)
 
 FocusLoop runs **100% out of the box** in demo mode without any API keys.
+
+When Local mode is active, the client makes zero AI or API requests. The optional connection check is only run after AI-assisted mode is enabled or when you explicitly choose to test the connection. Pasted material and supported files are processed in the browser and are never uploaded by the local study engine.
+
+### Hardening notes
+
+Oxlint reports four `react(set-state-in-effect)` warnings: asynchronous plan reveal and group hydration in `TaskBreakdown.jsx`, checklist reset synchronization in `FocusSession.jsx`, and saved-session hydration in `useSessionManager.js`. These effects synchronize local UI state with external/session inputs; none are timer or drift stale-closure warnings. `useTimer` keeps its completion callback in a ref, and `useDriftDetection` includes its signal dependencies.
 
 To enable live Claude AI generation:
 1. Copy `.env.example` to `.env`:

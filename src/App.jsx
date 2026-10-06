@@ -1,6 +1,8 @@
 import { useEffect, useCallback } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
 import { generateTaskBreakdown } from './services/aiService';
+import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
+import { ingestFile } from './engine/ingest';
 import { getSettings } from './services/storageService';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
@@ -11,6 +13,12 @@ import ContextRecovery from './components/ContextRecovery';
 import SessionComplete from './components/SessionComplete';
 import SessionHistory from './components/SessionHistory';
 import Settings from './components/Settings';
+import RecallReview from './components/RecallReview';
+import RevisionQueue from './components/RevisionQueue';
+import { getRevisionSchedule, saveRevisionSchedule } from './services/storageService';
+import { getDueReviews } from './engine/revision';
+import { saveExamPlan } from './services/storageService';
+import ExamPlanner from './components/ExamPlanner';
 
 function App() {
   const session = useSessionManager();
@@ -46,6 +54,25 @@ function App() {
       ]);
     }
   }, [session]);
+
+  const handleStartMaterial = useCallback((materialText, duration = 20, options = {}) => {
+    const plan = buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText: options.syllabusText });
+    const steps = plan.topics.map(topicToStep);
+    session.startNewTask('Study imported material', duration, {
+      studyPlan: { ...plan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null },
+    });
+    session.setBreakdownSteps(steps.length > 0 ? steps : [{
+      title: 'Review imported material',
+      description: 'Read the material and identify the first concept to study.',
+      estimatedMinutes: duration,
+      completed: false,
+    }]);
+  }, [session]);
+
+  const handleStartMaterialFile = useCallback(async (file, duration = 20, options = {}) => {
+    const materialText = await ingestFile(file);
+    handleStartMaterial(materialText, duration, options);
+  }, [handleStartMaterial]);
 
   // Handle step completion
   const handleCompleteStep = useCallback(() => {
@@ -87,6 +114,14 @@ function App() {
     session.startFocus();
   }, [session]);
 
+  const handleStartRevision = useCallback(() => {
+    session.setView(SESSION_STATES.REVISION);
+  }, [session]);
+
+  const handleOpenPlanner = useCallback(() => {
+    session.setView(SESSION_STATES.EXAM_PLANNER);
+  }, [session]);
+
   // Handle starting next session from adaptive recommendation
   const handleStartNextSession = useCallback((recommendedDuration) => {
     session.startFocus(recommendedDuration);
@@ -110,7 +145,11 @@ function App() {
         return (
           <HomeScreen
             onStartTask={handleStartTask}
+            onStartMaterial={handleStartMaterial}
+            onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
+            onStartRevision={handleStartRevision}
+            onOpenPlanner={handleOpenPlanner}
           />
         );
 
@@ -119,6 +158,7 @@ function App() {
           <TaskBreakdown
             task={session.task}
             steps={session.steps}
+            sessionDuration={session.sessionDuration}
             isLoading={session.isLoading}
             onStartFocus={handleStartFocus}
             onBack={() => session.goHome()}
@@ -142,6 +182,45 @@ function App() {
             onWhereWasI={handleWhereWasI}
             isPaused={session.view === SESSION_STATES.PAUSED}
             interruptionCount={session.interruptionCount}
+            referenceMode={session.referenceMode}
+            onToggleReferenceMode={session.setReferenceMode}
+            parkingLot={session.parkingLot}
+            onAddParkingItem={session.addParkingItem}
+            onUpdateParkingItem={session.updateParkingItem}
+            onAddSnapshot={session.addSnapshot}
+            sessionStartTime={session.sessionStartTime}
+            onPersistElapsed={session.persistElapsed}
+          />
+        );
+
+      case SESSION_STATES.RECALL:
+        return (
+          <RecallReview
+            topic={session.steps[Math.max(0, session.currentStepIndex - 1)]}
+            cards={session.recallCards}
+            onRate={session.rateRecall}
+            onFinish={session.finishRecall}
+          />
+        );
+
+      case SESSION_STATES.REVISION:
+        return (
+          <RevisionQueue
+            schedule={getDueReviews(getRevisionSchedule())}
+            onUpdate={saveRevisionSchedule}
+            onBack={() => session.goHome()}
+          />
+        );
+
+      case SESSION_STATES.EXAM_PLANNER:
+        return (
+          <ExamPlanner
+            topics={session.steps}
+            initialPlan={session.studyPlan?.examPlan}
+            defaultDate={session.studyPlan?.examDate}
+            defaultHours={session.studyPlan?.hoursPerDay}
+            onSave={saveExamPlan}
+            onBack={() => session.goHome()}
           />
         );
 
@@ -158,6 +237,8 @@ function App() {
             }}
             onChangeTask={() => session.goHome()}
             onWhereWasI={handleWhereWasI}
+            latestSnapshot={session.snapshots[session.snapshots.length - 1]}
+            nextAction={session.steps[session.currentStepIndex]?.nextAction}
           />
         );
 
@@ -171,6 +252,8 @@ function App() {
             onContinue={handleContinueFromContext}
             onReset={handleResetFromContext}
             onGoHome={() => session.goHome()}
+            latestSnapshot={session.snapshots[session.snapshots.length - 1]}
+            nextAction={session.steps[session.currentStepIndex]?.nextAction}
           />
         );
 
@@ -183,6 +266,8 @@ function App() {
             completedSteps={session.completedSteps}
             elapsedSeconds={session.elapsedSeconds}
             interruptionCount={session.interruptionCount}
+            parkingLot={session.parkingLot}
+            onUpdateParkingItem={session.updateParkingItem}
             onSaveReflection={session.saveReflection}
             onStartNextSession={handleStartNextSession}
             onGoHome={() => session.goHome()}
@@ -199,7 +284,11 @@ function App() {
         return (
           <HomeScreen
             onStartTask={handleStartTask}
+            onStartMaterial={handleStartMaterial}
+            onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
+            onStartRevision={handleStartRevision}
+            onOpenPlanner={handleOpenPlanner}
           />
         );
     }

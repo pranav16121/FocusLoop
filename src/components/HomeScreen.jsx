@@ -1,22 +1,72 @@
 import { useState } from 'react';
-import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask } from '../services/storageService';
+import { getCurrentTask, getSessionHistory, getSettings, saveSettings, clearCurrentTask, getRevisionSchedule } from '../services/storageService';
+import { getDueReviews } from '../engine/revision';
 import { formatDate, formatMinutes } from '../utils/formatTime';
+import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 
-const DURATION_PRESETS = [10, 15, 20, 25, 30, 45];
+const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onContinueSession }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession, onStartRevision, onOpenPlanner }) {
   const [taskInput, setTaskInput] = useState('');
+  const [materialInput, setMaterialInput] = useState('');
+  const [inputMode, setInputMode] = useState('task');
   const [duration, setDuration] = useState(() => getSettings().focusDuration || 20);
+  const [energy, setEnergy] = useState(() => getSettings().energy || 'medium');
+  const [customDuration, setCustomDuration] = useState('');
+  const [syllabusInput, setSyllabusInput] = useState('');
+  const [examDate, setExamDate] = useState('');
+  const [hoursPerDay, setHoursPerDay] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
   const [savedTask, setSavedTask] = useState(() => getCurrentTask());
   const [recentSessions] = useState(() => getSessionHistory().slice(-3).reverse());
+  const [fileError, setFileError] = useState('');
+  const dueReviews = getDueReviews(getRevisionSchedule());
+  const energyDuration = energy === 'low' ? Math.min(duration, 15) : energy === 'high' ? Math.max(duration, 25) : duration;
+  const suggestedTopics = (savedTask?.steps || []).filter(step => {
+    if (energy === 'low') return (step.complexity || 1) <= 2 || ['THEORY', 'DEFINITION'].includes(step.type);
+    if (energy === 'high') return step.type === 'DERIVATION' || (step.complexity || 1) >= 4;
+    return true;
+  }).slice(0, 3);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const trimmed = taskInput.trim();
     if (trimmed) {
-      onStartTask(trimmed, duration);
+      onStartTask(trimmed, energyDuration);
     }
+  };
+
+  const handleMaterialSubmit = (e) => {
+    e.preventDefault();
+    const trimmed = materialInput.trim();
+    if (trimmed && onStartMaterial) {
+      setIsParsing(true);
+      Promise.resolve(onStartMaterial(trimmed, customDuration ? Number(customDuration) : energyDuration, {
+        syllabusText: syllabusInput,
+        examDate,
+        hoursPerDay: Number(hoursPerDay) || null,
+      })).finally(() => setIsParsing(false));
+    }
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !onStartMaterialFile) return;
+    setFileError('');
+    try {
+      setIsParsing(true);
+      await onStartMaterialFile(file, customDuration ? Number(customDuration) : energyDuration, {
+        syllabusText: syllabusInput,
+        examDate,
+        hoursPerDay: Number(hoursPerDay) || null,
+      });
+    } catch (error) {
+      setFileError(error.message || 'This file could not be read locally.');
+    } finally {
+      setIsParsing(false);
+    }
+    event.target.value = '';
   };
 
   const handleDismissSavedTask = (e) => {
@@ -31,9 +81,9 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
 
   return (
     <div className="welcome-section animate-fade-in">
-      <h1 className="welcome-tagline">Get back to what matters.</h1>
+      <h1 className="welcome-tagline">FocusLoop - When you lose focus, do not lose context.</h1>
       <p className="welcome-subtitle">
-        Focus on one small step. If you drift, we'll help you pick it back up.
+        One calm next step, local study tools, and a gentle way back when context slips.
       </p>
 
       {savedTask && (
@@ -69,7 +119,102 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="welcome-input-area">
+      {dueReviews.length > 0 && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Due for revision</div>
+          <div className="continue-task">{dueReviews.length} concept{dueReviews.length === 1 ? '' : 's'} ready today</div>
+          <button className="btn btn-primary btn-sm" onClick={() => onStartRevision(dueReviews)}>Start revision</button>
+        </div>
+      )}
+
+      {savedTask?.studyPlan && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Today's plan</div>
+          <div className="continue-task">{savedTask.studyPlan.examDate ? `Exam plan for ${savedTask.studyPlan.examDate}` : 'Your next topics are ready to shape'}</div>
+          <button className="btn btn-secondary btn-sm" onClick={onOpenPlanner}>View daily plan</button>
+        </div>
+      )}
+
+      <div className="energy-selector" role="group" aria-label="Energy mode">
+        <span className="text-sm text-secondary">Energy</span>
+        {['low', 'medium', 'high'].map(level => (
+          <button key={level} className={`chip ${energy === level ? 'selected' : ''}`} onClick={() => { setEnergy(level); saveSettings({ ...getSettings(), energy: level }); }} aria-pressed={energy === level}>{level}</button>
+        ))}
+      </div>
+
+      {savedTask && suggestedTopics.length > 0 && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Today's focus lens</div>
+          <div className="text-sm text-secondary">{energy === 'low' ? 'Gentle review and recall' : energy === 'high' ? 'New and challenging material' : 'A balanced mix'}</div>
+          <div className="energy-topic-list">{suggestedTopics.map(topic => <span className="badge" key={topic.title}>{topic.title}</span>)}</div>
+        </div>
+      )}
+
+      <form onSubmit={inputMode === 'task' ? handleSubmit : handleMaterialSubmit} className="welcome-input-area">
+        <div className="chip-group" style={{ justifyContent: 'center', marginBottom: 'var(--space-4)' }} role="tablist" aria-label="Choose a starting point">
+          <button
+            type="button"
+            className={`chip ${inputMode === 'task' ? 'selected' : ''}`}
+            onClick={() => setInputMode('task')}
+            role="tab"
+            aria-selected={inputMode === 'task'}
+          >
+            Start with a task
+          </button>
+          <button
+            type="button"
+            className={`chip ${inputMode === 'material' ? 'selected' : ''}`}
+            onClick={() => setInputMode('material')}
+            role="tab"
+            aria-selected={inputMode === 'material'}
+          >
+            Start new material
+          </button>
+        </div>
+
+        {inputMode === 'material' ? (
+          <>
+            <textarea
+              className="text-input text-input-lg"
+              placeholder="Paste notes, a chapter, or a syllabus here..."
+              value={materialInput}
+              onChange={(e) => setMaterialInput(e.target.value)}
+              aria-label="Study material"
+              rows={7}
+              maxLength={MAX_SOURCE_LENGTH}
+              style={{ resize: 'vertical', minHeight: '150px' }}
+            />
+            <p className="text-sm text-tertiary" style={{ textAlign: 'left', marginTop: 'var(--space-2)' }}>
+              Processed locally in your browser. Nothing is uploaded. {materialInput.length.toLocaleString()} / {MAX_SOURCE_LENGTH.toLocaleString()} characters
+            </p>
+            <label className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-3)', cursor: 'pointer' }}>
+              Choose a file
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.pdf,.docx,.pptx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+            </label>
+            {fileError && <p className="text-sm" style={{ color: 'var(--color-error)', marginTop: 'var(--space-2)' }}>{fileError}</p>}
+            <textarea
+              className="text-input"
+              placeholder="Optional: paste past papers or a syllabus to boost important topics..."
+              value={syllabusInput}
+              onChange={(e) => setSyllabusInput(e.target.value)}
+              rows={3}
+              style={{ marginTop: 'var(--space-4)', resize: 'vertical' }}
+            />
+            <div className="material-options">
+              <label className="text-sm text-secondary">Exam date (optional)
+                <input className="text-input" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
+              </label>
+              <label className="text-sm text-secondary">Hours per day
+                <input className="text-input" type="number" min="0.5" max="16" step="0.5" placeholder="Optional" value={hoursPerDay} onChange={(e) => setHoursPerDay(e.target.value)} />
+              </label>
+            </div>
+          </>
+        ) : (
         <div className="input-group">
           <input
             type="text"
@@ -81,9 +226,10 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
             autoFocus
           />
         </div>
+        )}
 
         {/* Quick Demo Pill */}
-        {!taskInput && (
+        {inputMode === 'task' && !taskInput && (
           <div style={{ marginTop: 'var(--space-2)', textAlign: 'left' }}>
             <button
               type="button"
@@ -114,16 +260,26 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
                 {d}m
               </button>
             ))}
+            <input
+              className="text-input duration-custom-input"
+              type="number"
+              min="5"
+              max="120"
+              placeholder="Custom"
+              value={customDuration}
+              onChange={(e) => setCustomDuration(e.target.value)}
+              aria-label="Custom session length in minutes"
+            />
           </div>
         </div>
 
         <button
           type="submit"
           className="btn btn-primary btn-lg btn-block"
-          disabled={!taskInput.trim()}
+          disabled={isParsing || (inputMode === 'task' ? !taskInput.trim() : !materialInput.trim())}
           style={{ marginTop: 'var(--space-6)' }}
         >
-          Start Focus
+          {isParsing ? 'Reading locally...' : inputMode === 'task' ? 'Start Focus' : 'Build Study Plan'}
         </button>
       </form>
 
@@ -149,8 +305,8 @@ export default function HomeScreen({ onStartTask, onContinueSession }) {
       )}
 
       <p className="welcome-philosophy">
-        FocusLoop doesn't punish distraction.<br />
-        It helps you return.
+        Choose material. Shape a plan. Focus, recover, and keep going.<br />
+        Your files never leave your device. FocusLoop is not a medical device.
       </p>
     </div>
   );

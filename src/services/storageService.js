@@ -1,12 +1,14 @@
 // Storage Service - localStorage persistence with versioning
 
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 3;
 const KEYS = {
   VERSION: 'focusloop_version',
   SETTINGS: 'focusloop_settings',
   CURRENT_SESSION: 'focusloop_current_session',
   SESSION_HISTORY: 'focusloop_session_history',
   CURRENT_TASK: 'focusloop_current_task',
+  REVISION_SCHEDULE: 'focusloop_revision_schedule',
+  EXAM_PLAN: 'focusloop_exam_plan',
 };
 
 function isStorageAvailable() {
@@ -41,16 +43,132 @@ function safeSet(key, value) {
   }
 }
 
-function checkVersion() {
-  const stored = safeGet(KEYS.VERSION, 0);
-  if (stored < STORAGE_VERSION) {
-    // Migration could happen here in future versions
+function readRaw(key) {
+  if (!isStorageAvailable()) return { exists: false, value: null };
+  const raw = localStorage.getItem(key);
+  if (raw === null) return { exists: false, value: null };
+  try {
+    return { exists: true, value: JSON.parse(raw) };
+  } catch {
+    return { exists: true, value: null, corrupted: true };
+  }
+}
+
+function backupStorage(version) {
+  if (!isStorageAvailable()) return null;
+  const backupKey = `focusloop_backup_v${version}`;
+  const existing = localStorage.getItem(backupKey);
+  if (existing !== null) {
+    try { return JSON.parse(existing); } catch { return null; }
+  }
+  const backup = {};
+  Object.entries(KEYS).forEach(([name, key]) => {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) backup[name] = raw;
+  });
+  safeSet(backupKey, backup);
+  return backup;
+}
+
+function restoreBackup(backup) {
+  if (!backup || !isStorageAvailable()) return;
+  Object.entries(backup).forEach(([name, raw]) => {
+    const key = KEYS[name];
+    if (!key) return;
+    try {
+      JSON.parse(raw);
+      localStorage.setItem(key, raw);
+    } catch {
+      localStorage.removeItem(key);
+    }
+  });
+}
+
+function migrateV1ToV2() {
+  const settings = safeGet(KEYS.SETTINGS, {});
+  saveSettings({
+    ...settings,
+    mode: settings.mode || 'local',
+    energy: settings.energy || 'medium',
+  });
+
+  const currentSession = safeGet(KEYS.CURRENT_SESSION, null);
+  if (currentSession) {
+    saveCurrentSession({
+      ...currentSession,
+      studyPlan: currentSession.studyPlan || null,
+      recallCards: currentSession.recallCards || [],
+      revisionSchedule: currentSession.revisionSchedule || [],
+      examPlan: currentSession.examPlan || null,
+    });
+  }
+
+  const currentTask = safeGet(KEYS.CURRENT_TASK, null);
+  if (currentTask) {
+    saveCurrentTask({
+      ...currentTask,
+      studyPlan: currentTask.studyPlan || null,
+    });
+  }
+
+  const history = safeGet(KEYS.SESSION_HISTORY, []);
+  if (Array.isArray(history)) {
+    safeSet(KEYS.SESSION_HISTORY, history.map(record => ({
+      ...record,
+      studyPlan: record.studyPlan || null,
+      recallCards: record.recallCards || [],
+      revisionSchedule: record.revisionSchedule || [],
+      examPlan: record.examPlan || null,
+    })));
+  }
+}
+
+function migrateV2ToV3() {
+  const settings = safeGet(KEYS.SETTINGS, {});
+  saveSettings({
+    ...settings,
+    energy: settings.energy || 'medium',
+    mode: settings.mode || 'local',
+  });
+
+  const migrateRecord = (record) => record ? ({
+    ...record,
+    studyPlan: record.studyPlan || null,
+    recallCards: record.recallCards || [],
+    revisionSchedule: record.revisionSchedule || [],
+    examPlan: record.examPlan || null,
+  }) : record;
+
+  const currentTask = safeGet(KEYS.CURRENT_TASK, null);
+  if (currentTask) saveCurrentTask(migrateRecord(currentTask));
+  const currentSession = safeGet(KEYS.CURRENT_SESSION, null);
+  if (currentSession) saveCurrentSession(migrateRecord(currentSession));
+  const history = safeGet(KEYS.SESSION_HISTORY, []);
+  if (Array.isArray(history)) safeSet(KEYS.SESSION_HISTORY, history.map(migrateRecord));
+  if (!Array.isArray(safeGet(KEYS.REVISION_SCHEDULE, null))) safeSet(KEYS.REVISION_SCHEDULE, []);
+}
+
+function migrateStorage() {
+  const versionRecord = readRaw(KEYS.VERSION);
+  const storedVersion = versionRecord.corrupted ? 0 : Number(versionRecord.value || 0);
+  if (storedVersion >= STORAGE_VERSION) return;
+
+  const backup = backupStorage(storedVersion);
+  try {
+    for (let version = storedVersion; version < STORAGE_VERSION; version += 1) {
+      if (version === 0 || version === 1) migrateV1ToV2();
+      if (version === 2) migrateV2ToV3();
+    }
+    safeSet(KEYS.VERSION, STORAGE_VERSION);
+  } catch (error) {
+    console.error('FocusLoop storage migration failed:', error);
+    restoreBackup(backup);
     safeSet(KEYS.VERSION, STORAGE_VERSION);
   }
 }
 
 // Initialize
-checkVersion();
+migrateStorage();
 
 // Settings
 const DEFAULT_SETTINGS = {
@@ -62,6 +180,10 @@ const DEFAULT_SETTINGS = {
   theme: 'system', // 'light', 'dark', 'system'
   gentleInterventions: true,
   showStreak: true,
+  aiEnabled: false,
+  contextSnapshotInterval: 300,
+  mode: 'local',
+  energy: 'medium',
 };
 
 export function getSettings() {
@@ -95,9 +217,66 @@ export function saveCurrentSession(session) {
   return safeSet(KEYS.CURRENT_SESSION, session);
 }
 
+export function getSessionDefaults(session = {}) {
+  return {
+    referenceMode: false,
+    parkingLot: [],
+    snapshots: [],
+    studyPlan: null,
+    recallCards: [],
+    revisionSchedule: [],
+    examPlan: null,
+    ...session,
+  };
+}
+
 export function clearCurrentSession() {
   if (!isStorageAvailable()) return;
   try { localStorage.removeItem(KEYS.CURRENT_SESSION); } catch {}
+}
+
+export function getRevisionSchedule() {
+  return safeGet(KEYS.REVISION_SCHEDULE, []);
+}
+
+export function saveRevisionSchedule(schedule) {
+  return safeSet(KEYS.REVISION_SCHEDULE, schedule);
+}
+
+export function getExamPlan() {
+  return safeGet(KEYS.EXAM_PLAN, null);
+}
+
+export function saveExamPlan(plan) {
+  return safeSet(KEYS.EXAM_PLAN, plan);
+}
+
+export function exportData() {
+  return {
+    schemaVersion: STORAGE_VERSION,
+    exportedAt: new Date().toISOString(),
+    settings: getSettings(),
+    currentTask: getCurrentTask(),
+    currentSession: getCurrentSession(),
+    sessionHistory: getSessionHistory(),
+    revisionSchedule: getRevisionSchedule(),
+    examPlan: getExamPlan(),
+  };
+}
+
+export function importData(data) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.sessionHistory || [])) {
+    throw new Error('This backup file is not a valid FocusLoop backup.');
+  }
+  backupStorage(STORAGE_VERSION);
+  if (data.settings && typeof data.settings === 'object') saveSettings(data.settings);
+  if (data.currentTask) saveCurrentTask(data.currentTask);
+  if (data.currentSession) saveCurrentSession(data.currentSession);
+  safeSet(KEYS.SESSION_HISTORY, data.sessionHistory);
+  saveRevisionSchedule(Array.isArray(data.revisionSchedule) ? data.revisionSchedule : []);
+  saveExamPlan(data.examPlan || null);
+  safeSet(KEYS.VERSION, STORAGE_VERSION);
+  return true;
 }
 
 // Session History

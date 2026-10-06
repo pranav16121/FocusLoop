@@ -1,196 +1,236 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { packSessions } from '../algorithms/studyEngine';
 
-export default function TaskBreakdown({ task, steps, isLoading, onStartFocus, onBack, onUpdateSteps }) {
+function buildGroups(steps, sessionDuration) {
+  const packed = packSessions(steps.map((step, index) => ({
+    ...step,
+    id: step.topicId || `step-${index}`,
+  })), sessionDuration || 20);
+  return packed.map((session, index) => ({
+    id: session.id,
+    name: `Session ${index + 1}`,
+    targetMinutes: sessionDuration || 20,
+    topicIds: session.topics,
+  }));
+}
+
+function topicId(step, index) {
+  return step.topicId || `step-${index}`;
+}
+
+export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps }) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editValue, setEditValue] = useState('');
+  const [editMinutes, setEditMinutes] = useState(10);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
+  const [groups, setGroups] = useState(() => buildGroups(steps, sessionDuration));
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   useEffect(() => {
     if (!isLoading && steps.length > 0) {
       setRevealedCount(0);
       const interval = setInterval(() => {
-        setRevealedCount(prev => {
-          if (prev >= steps.length) {
+        setRevealedCount(previous => {
+          if (previous >= steps.length) {
             clearInterval(interval);
-            return prev;
+            return previous;
           }
-          return prev + 1;
+          return previous + 1;
         });
-      }, 150);
+      }, 100);
       return () => clearInterval(interval);
     }
   }, [isLoading, steps.length]);
 
+  useEffect(() => {
+    if (groups.length === 0 && steps.length > 0) setGroups(buildGroups(steps, sessionDuration));
+  }, [groups.length, sessionDuration, steps]);
+
+  const updateGroups = (nextGroups) => {
+    setGroups(nextGroups.filter(group => group.topicIds.length > 0));
+  };
+
   const handleRemoveStep = (index) => {
-    const newSteps = steps.filter((_, i) => i !== index);
-    onUpdateSteps(newSteps);
+    const removedId = topicId(steps[index], index);
+    onUpdateSteps(steps.filter((_, stepIndex) => stepIndex !== index));
+    updateGroups(groups.map(group => ({
+      ...group,
+      topicIds: group.topicIds.filter(id => id !== removedId),
+    })));
   };
 
   const handleEditStep = (index) => {
     setEditingIndex(index);
     setEditValue(steps[index].title);
+    setEditMinutes(steps[index].estimatedMinutes || 10);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(-1);
+    setEditValue('');
+    setEditMinutes(10);
   };
 
   const handleSaveEdit = () => {
-    if (editValue.trim() && editingIndex >= 0) {
-      const newSteps = [...steps];
-      newSteps[editingIndex] = { ...newSteps[editingIndex], title: editValue.trim() };
-      onUpdateSteps(newSteps);
-    }
-    setEditingIndex(-1);
-    setEditValue('');
+    if (!editValue.trim() || editingIndex < 0) return;
+    const updated = [...steps];
+    updated[editingIndex] = {
+      ...updated[editingIndex],
+      title: editValue.trim(),
+      estimatedMinutes: Math.min(180, Math.max(1, Number(editMinutes) || 1)),
+    };
+    onUpdateSteps(updated);
+    handleCancelEdit();
   };
 
   const handleAddStep = () => {
-    if (newStepTitle.trim()) {
-      const newSteps = [...steps, { title: newStepTitle.trim(), description: '', estimatedMinutes: 10, completed: false }];
-      onUpdateSteps(newSteps);
-      setNewStepTitle('');
-      setIsAddingStep(false);
-      setRevealedCount(newSteps.length);
-    }
+    if (!newStepTitle.trim()) return;
+    const newStep = {
+      title: newStepTitle.trim(),
+      description: 'A custom step for this study plan.',
+      estimatedMinutes: 10,
+      type: 'THEORY',
+      completed: false,
+    };
+    const nextSteps = [...steps, newStep];
+    onUpdateSteps(nextSteps);
+    const nextGroups = groups.length > 0 ? [...groups] : [{ id: 'session-1', name: 'Session 1', targetMinutes: sessionDuration, topicIds: [] }];
+    nextGroups[nextGroups.length - 1].topicIds.push(topicId(newStep, nextSteps.length - 1));
+    setGroups(nextGroups);
+    setNewStepTitle('');
+    setIsAddingStep(false);
+    setRevealedCount(nextSteps.length);
   };
 
+  const handleDrop = (targetGroupId) => {
+    if (draggedIndex === null) return;
+    const draggedId = topicId(steps[draggedIndex], draggedIndex);
+    const nextGroups = groups.map(group => ({ ...group, topicIds: group.topicIds.filter(id => id !== draggedId) }));
+    const target = nextGroups.find(group => group.id === targetGroupId);
+    if (target) target.topicIds.push(draggedId);
+    const orderedIds = nextGroups.flatMap(group => group.topicIds);
+    const nextSteps = orderedIds.map(id => steps.find((step, index) => topicId(step, index) === id)).filter(Boolean);
+    onUpdateSteps(nextSteps);
+    setGroups(nextGroups);
+    setDraggedIndex(null);
+  };
+
+  const updateGroup = (groupId, changes) => {
+    setGroups(groups.map(group => group.id === groupId ? { ...group, ...changes } : group));
+  };
+
+  const splitGroup = (groupId) => {
+    const groupIndex = groups.findIndex(group => group.id === groupId);
+    const group = groups[groupIndex];
+    if (!group || group.topicIds.length < 2) return;
+    const midpoint = Math.ceil(group.topicIds.length / 2);
+    const first = { ...group, topicIds: group.topicIds.slice(0, midpoint) };
+    const second = { id: `${group.id}-split`, name: `${group.name} - Part 2`, targetMinutes: group.targetMinutes, topicIds: group.topicIds.slice(midpoint) };
+    setGroups([...groups.slice(0, groupIndex), first, second, ...groups.slice(groupIndex + 1)]);
+  };
+
+  const mergeGroup = (groupId) => {
+    const groupIndex = groups.findIndex(group => group.id === groupId);
+    if (groupIndex <= 0) return;
+    const previous = groups[groupIndex - 1];
+    const current = groups[groupIndex];
+    const merged = { ...previous, topicIds: [...previous.topicIds, ...current.topicIds] };
+    setGroups([...groups.slice(0, groupIndex - 1), merged, ...groups.slice(groupIndex + 1)]);
+  };
+
+  const moveGroup = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= groups.length) return;
+    const reordered = [...groups];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setGroups(reordered);
+  };
+
+  const totalMinutes = steps.reduce((total, step) => total + (step.estimatedMinutes || 0), 0);
   const allRevealed = revealedCount >= steps.length;
 
   return (
-    <div className="animate-slide-up" style={{ padding: 'var(--space-6) 0', maxWidth: '540px', margin: '0 auto' }}>
-      <p className="text-sm text-tertiary text-center" style={{ marginBottom: 'var(--space-1)' }}>Your task</p>
-      <h2 className="heading-2 text-center" style={{ marginBottom: 'var(--space-2)' }}>{task}</h2>
-      <p className="text-center text-secondary" style={{ marginBottom: 'var(--space-6)' }}>
-        Let's make this smaller. One small step at a time.
-      </p>
+    <div className="animate-slide-up plan-container">
+      <p className="text-sm text-tertiary text-center">Your study plan</p>
+      <h2 className="heading-2 text-center">{task}</h2>
+      <p className="text-center text-secondary plan-intro">Shape the plan until it feels startable.</p>
+
+      {!isLoading && steps.length > 0 && (
+        <div className="plan-summary">
+          <span className="badge badge-accent">{steps.length} topics</span>
+          <span className="text-sm text-tertiary">{totalMinutes} minutes across {groups.length} sessions</span>
+        </div>
+      )}
 
       {isLoading ? (
-        <div style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
-          <div className="loading-dots">
-            <div className="loading-dot" />
-            <div className="loading-dot" />
-            <div className="loading-dot" />
-          </div>
-          <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
-            Breaking task into manageable micro-steps...
-          </p>
+        <div className="plan-loading">
+          <div className="loading-dots"><div className="loading-dot" /><div className="loading-dot" /><div className="loading-dot" /></div>
+          <p className="text-sm text-tertiary">Building your local study plan...</p>
         </div>
       ) : (
         <>
-          <ol className="step-list" style={{ marginBottom: 'var(--space-4)' }}>
-            {steps.map((step, index) => (
-              <li
-                key={index}
-                className="step-item step-enter"
-                style={{
-                  opacity: index < revealedCount ? 1 : 0,
-                  transform: index < revealedCount ? 'translateX(0)' : 'translateX(-10px)',
-                  transition: 'opacity 0.25s ease, transform 0.25s ease',
-                }}
-              >
-                <div className="step-checkbox" aria-hidden="true">
-                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                    {index + 1}
-                  </span>
-                </div>
-                <div className="step-content">
-                  {editingIndex === index ? (
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                      <input
-                        type="text"
-                        className="text-input"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                        autoFocus
-                        style={{ padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--font-size-sm)' }}
-                      />
-                      <button className="btn btn-sm btn-secondary" onClick={handleSaveEdit}>Save</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="step-title">{step.title}</div>
-                      {step.description && <div className="step-description">{step.description}</div>}
-                    </>
-                  )}
-                </div>
-                {step.estimatedMinutes && (
-                  <span className="step-estimate">{step.estimatedMinutes}m</span>
-                )}
-                {editingIndex !== index && (
-                  <div style={{ display: 'flex', gap: 'var(--space-1)', flexShrink: 0 }}>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleEditStep(index)}
-                      aria-label={`Edit step ${index + 1}`}
-                      style={{ padding: 'var(--space-1)' }}
-                      title="Edit step"
-                    >
-                      ✏️
-                    </button>
-                    {steps.length > 1 && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleRemoveStep(index)}
-                        aria-label={`Remove step ${index + 1}`}
-                        style={{ padding: 'var(--space-1)' }}
-                        title="Remove step"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ol>
-
-          {/* Add Step */}
-          {allRevealed && (
-            <div style={{ marginBottom: 'var(--space-6)', textAlign: 'left' }}>
-              {!isAddingStep ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setIsAddingStep(true)}
-                  style={{ color: 'var(--color-accent)', fontSize: 'var(--font-size-sm)' }}
+          <div className="plan-sessions">
+            {groups.map((group, groupIndex) => {
+              const groupSteps = group.topicIds.map(id => steps.find((step, index) => topicId(step, index) === id)).filter(Boolean);
+              const groupMinutes = groupSteps.reduce((total, step) => total + (step.estimatedMinutes || 0), 0);
+              return (
+                <section
+                  className="plan-session-card"
+                  key={group.id}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => handleDrop(group.id)}
                 >
-                  + Add a custom step
-                </button>
-              ) : (
-                <div className="card card-compact animate-fade-in" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    className="text-input"
-                    placeholder="Enter new step..."
-                    value={newStepTitle}
-                    onChange={(e) => setNewStepTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddStep()}
-                    autoFocus
-                    style={{ padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--font-size-sm)', flex: 1 }}
-                  />
-                  <button className="btn btn-sm btn-primary" onClick={handleAddStep} disabled={!newStepTitle.trim()}>
-                    Add
-                  </button>
-                  <button className="btn btn-sm btn-ghost" onClick={() => setIsAddingStep(false)}>
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                  <div className="plan-session-header">
+                    <input className="plan-session-name" value={group.name} onChange={(event) => updateGroup(group.id, { name: event.target.value })} aria-label="Session name" />
+                    <label className="plan-session-length">Target
+                      <input type="number" min="5" max="180" value={group.targetMinutes} onChange={(event) => updateGroup(group.id, { targetMinutes: Number(event.target.value) || 5 })} aria-label="Session target minutes" /> min
+                    </label>
+                  </div>
+                  <div className="plan-session-meta"><span>{groupMinutes}m estimated</span><span>{groupSteps.length} topics</span></div>
+                  <div className="plan-topic-list">
+                    {groupSteps.map((step) => {
+                      const index = steps.indexOf(step);
+                      return (
+                        <article className="plan-topic" key={topicId(step, index)} draggable onDragStart={() => setDraggedIndex(index)}>
+                          <span className="plan-topic-drag" aria-hidden="true">::</span>
+                          <div className="plan-topic-content">
+                            {editingIndex === index ? (
+                              <div className="step-edit-form">
+                                <label className="step-edit-field"><span className="step-edit-label">Topic name</span><input className="text-input" value={editValue} onChange={(event) => setEditValue(event.target.value)} autoFocus /></label>
+                                <label className="step-edit-field step-edit-time"><span className="step-edit-label">Minutes</span><input className="text-input" type="number" min="1" max="180" value={editMinutes} onChange={(event) => setEditMinutes(event.target.value)} /></label>
+                                <div className="step-edit-actions"><button className="btn btn-primary btn-sm" onClick={handleSaveEdit}>Save</button><button className="btn btn-ghost btn-sm" onClick={handleCancelEdit}>Cancel</button></div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="plan-topic-title">{step.title}</div>
+                                <div className="plan-topic-description">{step.description}</div>
+                                <div className="plan-topic-indicators"><span className="badge">{(step.type || 'THEORY').toLowerCase()}</span><span className="text-sm text-tertiary">Difficulty {step.complexity || 1}/5</span><span className="text-sm text-tertiary">Importance {step.importance || 1}/5</span></div>
+                              </>
+                            )}
+                          </div>
+                          {editingIndex !== index && <><span className="step-estimate">{step.estimatedMinutes || 0}m</span><button className="btn btn-ghost btn-sm" onClick={() => handleEditStep(index)} aria-label={`Edit ${step.title}`}>Edit</button><button className="btn btn-ghost btn-sm" onClick={() => handleRemoveStep(index)} aria-label={`Delete ${step.title}`}>Delete</button></>}
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <div className="plan-session-actions">
+                    <button className="btn btn-ghost btn-sm" onClick={() => splitGroup(group.id)} disabled={groupSteps.length < 2}>Split</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => mergeGroup(group.id)} disabled={groupIndex === 0}>Merge with previous</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => moveGroup(groupIndex, -1)} disabled={groupIndex === 0} aria-label="Move session up">Up</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => moveGroup(groupIndex, 1)} disabled={groupIndex === groups.length - 1} aria-label="Move session down">Down</button>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
 
-          {allRevealed && (
-            <div className="animate-fade-in" style={{ textAlign: 'center' }}>
-              <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-4)' }}>
-                Ready when you are. Starting with: <strong>{steps[0]?.title}</strong>
-              </p>
-              <div className="btn-group" style={{ justifyContent: 'center' }}>
-                <button className="btn btn-ghost" onClick={onBack}>Back</button>
-                <button className="btn btn-primary btn-lg" onClick={onStartFocus}>
-                  Start Focus Session
-                </button>
-              </div>
-            </div>
-          )}
+          {allRevealed && <div className="plan-add-topic">
+            {!isAddingStep ? <button className="btn btn-ghost btn-sm" onClick={() => setIsAddingStep(true)}>+ Add a custom topic</button> : <div className="card card-compact"><input className="text-input" placeholder="Topic name" value={newStepTitle} onChange={(event) => setNewStepTitle(event.target.value)} autoFocus /><div className="btn-group" style={{ marginTop: 'var(--space-2)' }}><button className="btn btn-primary btn-sm" onClick={handleAddStep}>Add topic</button><button className="btn btn-ghost btn-sm" onClick={() => setIsAddingStep(false)}>Cancel</button></div></div>}
+          </div>}
+
+          {allRevealed && <div className="plan-start-area"><p className="text-sm text-secondary">Ready to begin with: <strong>{steps[0]?.title}</strong></p><div className="btn-group" style={{ justifyContent: 'center' }}><button className="btn btn-ghost" onClick={onBack}>Back</button><button className="btn btn-primary btn-lg" onClick={onStartFocus}>Start Session 1</button></div></div>}
         </>
       )}
     </div>
