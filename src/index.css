@@ -431,6 +431,46 @@ textarea.text-input {
   margin-top: var(--space-4);
 }
 
+.reference-mode-banner {
+  width: 100%;
+  max-width: 440px;
+  padding: var(--space-2) var(--space-3);
+  margin: calc(-1 * var(--space-4)) auto var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+}
+
+.focus-action-checklist {
+  width: 100%;
+  max-width: 440px;
+  margin: calc(-1 * var(--space-6)) auto var(--space-4);
+  padding: var(--space-3);
+  text-align: left;
+  border-left: 2px solid var(--color-accent);
+}
+
+.focus-action-item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  margin-top: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.focus-action-item input {
+  accent-color: var(--color-accent);
+  margin-top: 4px;
+}
+
+.focus-action-item.checked span {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+}
+
 .focus-tool-card {
   width: 100%;
   max-width: 440px;

@@ -33,9 +33,11 @@ export default function FocusSession({
   const [showParkingLot, setShowParkingLot] = useState(false);
   const [snapshotText, setSnapshotText] = useState('');
   const [showSnapshotPrompt, setShowSnapshotPrompt] = useState(false);
+  const [checkedActions, setCheckedActions] = useState([]);
   const nextSnapshotAtRef = useRef((getSettings().contextSnapshotInterval || 300));
   const elapsedRef = useRef(elapsedSeconds || 0);
   const currentStep = steps[currentStepIndex];
+  const actionItems = (currentStep?.nextAction || getLocalNextAction(currentStep)).split(/\.\s+/).filter(Boolean);
   
   const handleTimerComplete = useCallback(() => {
     onEndSession(sessionDuration * 60);
@@ -79,6 +81,21 @@ export default function FocusSession({
       drift.dismissDrift();
     }
   }, [isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setCheckedActions([]);
+  }, [currentStepIndex]);
+
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      if (event.key.toLowerCase() === 'p' && event.ctrlKey && event.shiftKey) {
+        event.preventDefault();
+        setShowParkingLot(true);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
   const handleNeedHelp = () => {
     setShowHelp(true);
@@ -143,6 +160,22 @@ export default function FocusSession({
         {currentStep?.title || 'Your current step'}
       </div>
 
+      {referenceMode && <div className="reference-mode-banner" role="status">Reference Mode is on. You can look things up without a return prompt.</div>}
+
+      <div className="focus-action-checklist" aria-label="Micro-action checklist">
+        <p className="text-sm text-secondary">Next tiny actions</p>
+        {actionItems.map((action, index) => (
+          <label className={`focus-action-item ${checkedActions.includes(index) ? 'checked' : ''}`} key={`${action}-${index}`}>
+            <input
+              type="checkbox"
+              checked={checkedActions.includes(index)}
+              onChange={() => setCheckedActions(previous => previous.includes(index) ? previous.filter(item => item !== index) : [...previous, index])}
+            />
+            <span>{action}{action.endsWith('.') ? '' : '.'}</span>
+          </label>
+        ))}
+      </div>
+
       <div 
         className="timer-display" 
         role="timer" 
@@ -178,7 +211,7 @@ export default function FocusSession({
           {referenceMode ? 'Reference Mode ON' : 'Reference Mode'}
         </button>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowParkingLot(!showParkingLot)}>
-          Parking lot {parkingLot.length > 0 ? `(${parkingLot.filter(item => item.status === 'open').length})` : ''}
+          Parking lot {parkingLot.length > 0 ? `(${parkingLot.filter(item => item.status === 'open').length})` : ''} <span className="text-tertiary">Ctrl+Shift+P</span>
         </button>
       </div>
 
