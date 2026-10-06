@@ -9,6 +9,7 @@ import {
   addSessionToHistory,
   getSessionDefaults,
 } from '../services/storageService';
+import { generateRecallCards, rateRecallCard } from '../engine/recall';
 
 export const SESSION_STATES = {
   IDLE: 'idle',
@@ -21,6 +22,7 @@ export const SESSION_STATES = {
   BREAK: 'break',
   COMPLETED: 'completed',
   REFLECTION: 'reflection',
+  RECALL: 'recall',
   ADAPTIVE: 'adaptive',
   HISTORY: 'history',
   SETTINGS: 'settings',
@@ -43,6 +45,7 @@ export function useSessionManager() {
   const [parkingLot, setParkingLot] = useState([]);
   const [snapshots, setSnapshots] = useState([]);
   const [studyPlan, setStudyPlan] = useState(null);
+  const [recallCards, setRecallCards] = useState([]);
   const startTimeRef = useRef(null);
   
   // Restore session on mount
@@ -66,6 +69,7 @@ export function useSessionManager() {
       setParkingLot(sessionData.parkingLot || []);
       setSnapshots(sessionData.snapshots || []);
       setStudyPlan(savedTask.studyPlan || sessionData.studyPlan || null);
+      setRecallCards(sessionData.recallCards || []);
       // Don't auto-resume to focus, go to context recovery
       if (sessionData.state === SESSION_STATES.FOCUS || sessionData.state === SESSION_STATES.PAUSED) {
         setView(SESSION_STATES.CONTEXT_RECOVERY);
@@ -88,6 +92,7 @@ export function useSessionManager() {
     const nextParkingLot = snapshot.parkingLot ?? parkingLot;
     const nextSnapshots = snapshot.snapshots ?? snapshots;
     const nextStudyPlan = snapshot.studyPlan ?? studyPlan;
+    const nextRecallCards = snapshot.recallCards ?? recallCards;
 
     if (nextTask) {
       saveCurrentTask({
@@ -96,6 +101,7 @@ export function useSessionManager() {
         currentStepIndex: nextStepIndex,
         completedSteps: nextCompletedSteps,
         studyPlan: nextStudyPlan,
+        recallCards: nextRecallCards,
       });
     }
     saveCurrentSession({
@@ -108,8 +114,9 @@ export function useSessionManager() {
       parkingLot: nextParkingLot,
       snapshots: nextSnapshots,
       studyPlan: nextStudyPlan,
+      recallCards: nextRecallCards,
     });
-  }, [task, steps, currentStepIndex, completedSteps, view, sessionDuration, elapsedSeconds, interruptionCount, sessionStartTime, referenceMode, parkingLot, snapshots, studyPlan]);
+  }, [task, steps, currentStepIndex, completedSteps, view, sessionDuration, elapsedSeconds, interruptionCount, sessionStartTime, referenceMode, parkingLot, snapshots, studyPlan, recallCards]);
   
   const startNewTask = useCallback((taskText, duration = 20, metadata = {}) => {
     setTask(taskText);
@@ -122,6 +129,7 @@ export function useSessionManager() {
     setParkingLot([]);
     setSnapshots([]);
     setStudyPlan(metadata.studyPlan || null);
+    setRecallCards([]);
     setView(SESSION_STATES.BREAKDOWN);
     setIsLoading(true);
   }, []);
@@ -167,18 +175,18 @@ export function useSessionManager() {
     setSteps(updatedSteps);
     setElapsedSeconds(actualElapsed);
 
-    if (newIndex >= steps.length) {
-      setView(SESSION_STATES.COMPLETED);
-    } else {
-      setCurrentStepIndex(newIndex);
-    }
-    persistState(newIndex >= steps.length ? SESSION_STATES.COMPLETED : view, {
+    const newRecallCards = generateRecallCards(steps[currentStepIndex]);
+    setRecallCards(newRecallCards);
+    setCurrentStepIndex(newIndex);
+    setView(SESSION_STATES.RECALL);
+    persistState(SESSION_STATES.RECALL, {
       steps: updatedSteps,
       currentStepIndex: newIndex,
       completedSteps: newCompleted,
       elapsed: actualElapsed,
+      recallCards: newRecallCards,
     });
-  }, [completedSteps, currentStepIndex, steps, elapsedSeconds, view, persistState]);
+  }, [completedSteps, currentStepIndex, steps, elapsedSeconds, persistState]);
   
   const triggerDrift = useCallback((count, driftData) => {
     setInterruptionCount(count);
@@ -197,6 +205,18 @@ export function useSessionManager() {
     setView(SESSION_STATES.FOCUS);
     persistState(SESSION_STATES.FOCUS);
   }, [persistState]);
+
+  const rateRecall = useCallback((cardId, rating) => {
+    const nextCards = recallCards.map(card => card.id === cardId ? rateRecallCard(card, rating) : card);
+    setRecallCards(nextCards);
+    persistState(undefined, { recallCards: nextCards });
+  }, [recallCards, persistState]);
+
+  const finishRecall = useCallback(() => {
+    const nextView = currentStepIndex >= steps.length ? SESSION_STATES.COMPLETED : SESSION_STATES.FOCUS;
+    setView(nextView);
+    persistState(nextView);
+  }, [currentStepIndex, steps.length, persistState]);
   
   const showContextRecovery = useCallback(() => {
     setView(SESSION_STATES.CONTEXT_RECOVERY);
@@ -227,6 +247,7 @@ export function useSessionManager() {
       endTime: new Date().toISOString(),
       parkingLot,
       snapshots,
+      recallCards,
     };
     addSessionToHistory(sessionRecord);
     clearCurrentSession();
@@ -242,7 +263,7 @@ export function useSessionManager() {
     } else {
       clearCurrentTask();
     }
-  }, [task, steps, completedSteps, currentStepIndex, elapsedSeconds, interruptionCount, sessionStartTime, parkingLot, snapshots]);
+  }, [task, steps, completedSteps, currentStepIndex, elapsedSeconds, interruptionCount, sessionStartTime, parkingLot, snapshots, recallCards]);
   
   const dismissCurrentTask = useCallback(() => {
     clearCurrentTask();
@@ -256,6 +277,7 @@ export function useSessionManager() {
     setParkingLot([]);
     setSnapshots([]);
     setStudyPlan(null);
+    setRecallCards([]);
     setView(SESSION_STATES.IDLE);
   }, []);
 
@@ -287,6 +309,7 @@ export function useSessionManager() {
       setParkingLot(savedSession.parkingLot || []);
       setSnapshots(savedSession.snapshots || []);
       setStudyPlan(savedTask.studyPlan || savedSession.studyPlan || null);
+      setRecallCards(savedSession.recallCards || []);
       setView(SESSION_STATES.CONTEXT_RECOVERY);
     }
   }, []);
@@ -315,6 +338,7 @@ export function useSessionManager() {
     parkingLot,
     snapshots,
     studyPlan,
+    recallCards,
     setReferenceMode: (enabled) => {
       setReferenceMode(enabled);
       persistState(undefined, { referenceMode: enabled });
@@ -344,6 +368,8 @@ export function useSessionManager() {
     completeStep,
     triggerDrift,
     continueFromDrift,
+    rateRecall,
+    finishRecall,
     showContextRecovery,
     persistElapsed,
     endSession,

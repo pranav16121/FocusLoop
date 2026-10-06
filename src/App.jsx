@@ -13,6 +13,7 @@ import ContextRecovery from './components/ContextRecovery';
 import SessionComplete from './components/SessionComplete';
 import SessionHistory from './components/SessionHistory';
 import Settings from './components/Settings';
+import RecallReview from './components/RecallReview';
 
 function App() {
   const session = useSessionManager();
@@ -174,6 +175,16 @@ function App() {
             onAddSnapshot={session.addSnapshot}
             sessionStartTime={session.sessionStartTime}
             onPersistElapsed={session.persistElapsed}
+          />
+        );
+
+      case SESSION_STATES.RECALL:
+        return (
+          <RecallReview
+            topic={session.steps[Math.max(0, session.currentStepIndex - 1)]}
+            cards={session.recallCards}
+            onRate={session.rateRecall}
+            onFinish={session.finishRecall}
           />
         );
 
