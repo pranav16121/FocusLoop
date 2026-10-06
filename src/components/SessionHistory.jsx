@@ -4,7 +4,7 @@ import { formatDate, formatMinutes } from '../utils/formatTime';
 
 export default function SessionHistory({ onBack }) {
   const [expandedId, setExpandedId] = useState(null);
-  const sessions = useMemo(() => getSessionHistory().reverse(), []);
+  const sessions = useMemo(() => [...getSessionHistory()].reverse(), []);
 
   const [now] = useState(() => Date.now());
   const weekStats = useMemo(() => {
@@ -13,7 +13,7 @@ export default function SessionHistory({ onBack }) {
     return {
       count: recent.length,
       totalMinutes: recent.reduce((sum, s) => sum + (s.duration || 0), 0),
-      totalInterruptions: recent.reduce((sum, s) => sum + (s.interruptions || 0), 0),
+      comebacks: recent.filter(s => (s.interruptions || 0) > 0).length,
     };
   }, [sessions, now]);
 
@@ -40,7 +40,7 @@ export default function SessionHistory({ onBack }) {
           </div>
           <div className="history-stat-box">
             <div className="history-stat-value">{weekStats.totalInterruptions}</div>
-            <div className="history-stat-label">interruptions</div>
+            <div className="history-stat-label">comebacks</div>
           </div>
         </div>
       )}
@@ -100,6 +100,16 @@ export default function SessionHistory({ onBack }) {
                         </p>
                       )}
                     </div>
+                  )}
+                  {session.recallCards?.length > 0 && (
+                    <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-3)' }}>
+                      {session.recallCards.length} recall cards reviewed
+                    </p>
+                  )}
+                  {session.parkingLot?.length > 0 && (
+                    <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-1)' }}>
+                      {session.parkingLot.length} parked thoughts captured
+                    </p>
                   )}
                 </div>
               )}
