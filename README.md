@@ -102,7 +102,7 @@ Open your browser to `http://localhost:5173`.
 
 ---
 
-## 🎬 2-Minute Hackathon Demo Script
+## 🎬 2-Minute Demo Script
 
 Follow this script to demonstrate the full end-to-end loop:
 
