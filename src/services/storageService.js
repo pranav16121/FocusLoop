@@ -246,6 +246,34 @@ export function saveExamPlan(plan) {
   return safeSet(KEYS.EXAM_PLAN, plan);
 }
 
+export function exportData() {
+  return {
+    schemaVersion: STORAGE_VERSION,
+    exportedAt: new Date().toISOString(),
+    settings: getSettings(),
+    currentTask: getCurrentTask(),
+    currentSession: getCurrentSession(),
+    sessionHistory: getSessionHistory(),
+    revisionSchedule: getRevisionSchedule(),
+    examPlan: getExamPlan(),
+  };
+}
+
+export function importData(data) {
+  if (!data || typeof data !== 'object' || !Array.isArray(data.sessionHistory || [])) {
+    throw new Error('This backup file is not a valid FocusLoop backup.');
+  }
+  backupStorage(STORAGE_VERSION);
+  if (data.settings && typeof data.settings === 'object') saveSettings(data.settings);
+  if (data.currentTask) saveCurrentTask(data.currentTask);
+  if (data.currentSession) saveCurrentSession(data.currentSession);
+  safeSet(KEYS.SESSION_HISTORY, data.sessionHistory);
+  saveRevisionSchedule(Array.isArray(data.revisionSchedule) ? data.revisionSchedule : []);
+  saveExamPlan(data.examPlan || null);
+  safeSet(KEYS.VERSION, STORAGE_VERSION);
+  return true;
+}
+
 // Session History
 export function getSessionHistory() {
   return safeGet(KEYS.SESSION_HISTORY, []);
