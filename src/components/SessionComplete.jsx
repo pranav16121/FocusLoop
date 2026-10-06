@@ -16,6 +16,8 @@ export default function SessionComplete({
   onSaveReflection,
   onStartNextSession,
   onGoHome,
+  parkingLot = [],
+  onUpdateParkingItem,
 }) {
   const [feeling, setFeeling] = useState(null);
   const [obstacles, setObstacles] = useState([]);
@@ -153,6 +155,24 @@ export default function SessionComplete({
           <span className="text-sm" style={{ fontWeight: 600 }}>{interruptionCount}</span>
         </div>
       </div>
+
+      {parkingLot.length > 0 && (
+        <div className="card card-compact" style={{ marginBottom: 'var(--space-4)' }}>
+          <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-2)' }}>Parking lot</p>
+          {parkingLot.map(item => (
+            <div key={item.id} className="parking-item">
+              <span style={{ textDecoration: item.status === 'deleted' ? 'line-through' : 'none' }}>{item.text}</span>
+              {item.status === 'open' ? (
+                <span className="parking-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'completed')}>Done</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'deferred')}>Defer</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'deleted')}>Delete</button>
+                </span>
+              ) : <span className="badge">{item.status}</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {aiReflection?.reflection && (
         <div className="card card-compact animate-fade-in" style={{ marginBottom: 'var(--space-4)', background: 'var(--color-bg-subtle)', border: 'none' }}>

@@ -5,6 +5,7 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
   const [revealedCount, setRevealedCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editValue, setEditValue] = useState('');
+  const [editMinutes, setEditMinutes] = useState(10);
   const [newStepTitle, setNewStepTitle] = useState('');
   const [isAddingStep, setIsAddingStep] = useState(false);
 
@@ -32,16 +33,26 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
   const handleEditStep = (index) => {
     setEditingIndex(index);
     setEditValue(steps[index].title);
+    setEditMinutes(steps[index].estimatedMinutes || 10);
   };
 
   const handleSaveEdit = () => {
     if (editValue.trim() && editingIndex >= 0) {
       const newSteps = [...steps];
-      newSteps[editingIndex] = { ...newSteps[editingIndex], title: editValue.trim() };
+      newSteps[editingIndex] = {
+        ...newSteps[editingIndex],
+        title: editValue.trim(),
+        estimatedMinutes: Math.min(180, Math.max(1, Number(editMinutes) || 1)),
+      };
       onUpdateSteps(newSteps);
     }
+    handleCancelEdit();
+  };
+
+  const handleCancelEdit = () => {
     setEditingIndex(-1);
     setEditValue('');
+    setEditMinutes(10);
   };
 
   const handleAddStep = () => {
@@ -120,17 +131,34 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
                 </div>
                 <div className="step-content">
                   {editingIndex === index ? (
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                      <input
-                        type="text"
-                        className="text-input"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                        autoFocus
-                        style={{ padding: 'var(--space-2) var(--space-3)', fontSize: 'var(--font-size-sm)' }}
-                      />
-                      <button className="btn btn-sm btn-secondary" onClick={handleSaveEdit}>Save</button>
+                    <div className="step-edit-form">
+                      <label className="step-edit-field">
+                        <span className="step-edit-label">Step name</span>
+                        <input
+                          type="text"
+                          className="text-input"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                          autoFocus
+                        />
+                      </label>
+                      <label className="step-edit-field step-edit-time">
+                        <span className="step-edit-label">Minutes</span>
+                        <input
+                          type="number"
+                          className="text-input"
+                          min="1"
+                          max="180"
+                          step="1"
+                          value={editMinutes}
+                          onChange={(e) => setEditMinutes(e.target.value)}
+                        />
+                      </label>
+                      <div className="step-edit-actions">
+                        <button className="btn btn-sm btn-primary" onClick={handleSaveEdit} disabled={!editValue.trim()}>Save</button>
+                        <button className="btn btn-sm btn-ghost" onClick={handleCancelEdit}>Cancel</button>
+                      </div>
                     </div>
                   ) : (
                     <>

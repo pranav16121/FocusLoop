@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSettings } from '../services/storageService';
 
-export function useDriftDetection(isSessionActive) {
+export function useDriftDetection(isSessionActive, { referenceMode = false } = {}) {
   const [isDrifting, setIsDrifting] = useState(false);
   const [driftData, setDriftData] = useState(null);
   const [interruptions, setInterruptions] = useState([]);
-  const leftAtRef = useRef(null);
   const inactivityTimerRef = useRef(null);
   const lastActivityRef = useRef(0);
+  const awayStartedRef = useRef(null);
+  const processedReturnRef = useRef(null);
   
   const resetInactivityTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -16,7 +17,7 @@ export function useDriftDetection(isSessionActive) {
     }
     if (isSessionActive) {
       const currentSettings = getSettings();
-      if (currentSettings.gentleInterventions === false) return;
+      if (currentSettings.gentleInterventions === false || referenceMode) return;
 
       inactivityTimerRef.current = setTimeout(() => {
         const elapsed = Math.round((Date.now() - lastActivityRef.current) / 1000);
@@ -31,40 +32,59 @@ export function useDriftDetection(isSessionActive) {
         setInterruptions(prev => [...prev, data]);
       }, (currentSettings.inactivityThreshold || 180) * 1000);
     }
-  }, [isSessionActive]);
+  }, [isSessionActive, referenceMode]);
   
   // Tab visibility detection
   useEffect(() => {
     if (!isSessionActive) return;
     
-    const handleVisibilityChange = () => {
-      const currentSettings = getSettings();
-      if (currentSettings.gentleInterventions === false) return;
+    const handleAwayStart = () => {
+      if (!referenceMode && !awayStartedRef.current) awayStartedRef.current = Date.now();
+    };
 
-      if (document.hidden) {
-        leftAtRef.current = Date.now();
-      } else if (leftAtRef.current) {
-        const elapsed = Math.max(1, Math.round((Date.now() - leftAtRef.current) / 1000));
-        const threshold = currentSettings.tabAwayThreshold !== undefined ? currentSettings.tabAwayThreshold : 10;
-        
-        if (elapsed >= threshold) {
-          const interruption = {
-            type: 'tab-switch',
-            duration: elapsed,
-            leftAt: new Date(leftAtRef.current).toISOString(),
-            returnedAt: new Date().toISOString(),
-          };
-          setDriftData(interruption);
-          setIsDrifting(true);
-          setInterruptions(prev => [...prev, interruption]);
-        }
-        leftAtRef.current = null;
+    const handleReturn = () => {
+      const currentSettings = getSettings();
+      const awayAt = awayStartedRef.current;
+      if (currentSettings.gentleInterventions === false || referenceMode || !awayAt) {
+        if (referenceMode) awayStartedRef.current = null;
+        return;
       }
+      const elapsed = Math.max(1, Math.round((Date.now() - awayAt) / 1000));
+      if (processedReturnRef.current === awayAt) return;
+      processedReturnRef.current = awayAt;
+      if (elapsed < 5) {
+        awayStartedRef.current = null;
+        return;
+      }
+      const threshold = 30;
+      const interruption = {
+        type: 'return',
+        duration: elapsed,
+        leftAt: new Date(awayAt).toISOString(),
+        returnedAt: new Date().toISOString(),
+      };
+      if (elapsed >= threshold) {
+        setDriftData(interruption);
+        setIsDrifting(true);
+      }
+      setInterruptions(prev => [...prev, interruption]);
+      awayStartedRef.current = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) handleAwayStart();
+      else handleReturn();
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isSessionActive]);
+    window.addEventListener('blur', handleAwayStart);
+    window.addEventListener('focus', handleReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleAwayStart);
+      window.removeEventListener('focus', handleReturn);
+    };
+  }, [isSessionActive, referenceMode]);
   
   // Mouse/keyboard activity detection
   useEffect(() => {

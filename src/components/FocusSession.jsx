@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTimer } from '../hooks/useTimer';
 import { useDriftDetection } from '../hooks/useDriftDetection';
 import { getLocalNextAction } from '../algorithms/studyEngine';
+import { getSettings } from '../services/storageService';
 
 export default function FocusSession({
   task,
@@ -17,10 +18,22 @@ export default function FocusSession({
   isPaused,
   interruptionCount,
   elapsedSeconds,
+  referenceMode,
+  onToggleReferenceMode,
+  parkingLot,
+  onAddParkingItem,
+  onUpdateParkingItem,
+  onAddSnapshot,
+  onPersistElapsed,
 }) {
   const [helpText, setHelpText] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpLoading, setHelpLoading] = useState(false);
+  const [parkingText, setParkingText] = useState('');
+  const [showParkingLot, setShowParkingLot] = useState(false);
+  const [snapshotText, setSnapshotText] = useState('');
+  const [showSnapshotPrompt, setShowSnapshotPrompt] = useState(false);
+  const nextSnapshotAtRef = useRef((getSettings().contextSnapshotInterval || 300));
   const elapsedRef = useRef(elapsedSeconds || 0);
   const currentStep = steps[currentStepIndex];
   
@@ -29,7 +42,7 @@ export default function FocusSession({
   }, [onEndSession, sessionDuration]);
 
   const timer = useTimer(sessionDuration * 60, handleTimerComplete);
-  const drift = useDriftDetection(!isPaused && timer.isRunning);
+  const drift = useDriftDetection(!isPaused && timer.isRunning, { referenceMode });
 
   // Start timer on mount
   useEffect(() => {
@@ -39,7 +52,15 @@ export default function FocusSession({
   // Track elapsed
   useEffect(() => {
     elapsedRef.current = (sessionDuration * 60) - timer.seconds;
-  }, [timer.seconds, sessionDuration]);
+    if (elapsedRef.current > 0) {
+      onPersistElapsed(elapsedRef.current);
+    }
+    const interval = getSettings().contextSnapshotInterval || 300;
+    if (!isPaused && elapsedRef.current >= nextSnapshotAtRef.current && !showSnapshotPrompt) {
+      setShowSnapshotPrompt(true);
+      nextSnapshotAtRef.current += interval;
+    }
+  }, [timer.seconds, sessionDuration, isPaused, referenceMode, showSnapshotPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle drift detection
   useEffect(() => {
@@ -74,7 +95,7 @@ export default function FocusSession({
   const handlePauseResume = () => {
     if (timer.isRunning) {
       timer.pause();
-      onPause();
+      onPause(elapsedRef.current);
     } else {
       timer.resume();
       onResume();
@@ -90,6 +111,23 @@ export default function FocusSession({
   const handleEndSession = () => {
     timer.pause();
     onEndSession(elapsedRef.current);
+  };
+
+  const handleParkingSubmit = (event) => {
+    event.preventDefault();
+    const text = parkingText.trim();
+    if (!text) return;
+    onAddParkingItem(text);
+    setParkingText('');
+  };
+
+  const handleSnapshotSubmit = (event) => {
+    event.preventDefault();
+    const text = snapshotText.trim();
+    if (!text) return;
+    onAddSnapshot(text);
+    setSnapshotText('');
+    setShowSnapshotPrompt(false);
   };
 
   const handleManualSimulateDrift = () => {
@@ -134,6 +172,46 @@ export default function FocusSession({
           </span>
         )}
       </div>
+
+      <div className="focus-session-tools">
+        <button className={`btn btn-sm ${referenceMode ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onToggleReferenceMode(!referenceMode)} aria-pressed={referenceMode}>
+          {referenceMode ? 'Reference Mode ON' : 'Reference Mode'}
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowParkingLot(!showParkingLot)}>
+          Parking lot {parkingLot.length > 0 ? `(${parkingLot.filter(item => item.status === 'open').length})` : ''}
+        </button>
+      </div>
+
+      {showSnapshotPrompt && (
+        <form className="card card-accent focus-tool-card" onSubmit={handleSnapshotSubmit}>
+          <p className="text-sm" style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>Where are you right now?</p>
+          <textarea className="text-input" value={snapshotText} onChange={event => setSnapshotText(event.target.value)} placeholder="I finished..." rows="2" autoFocus />
+          <div className="btn-group" style={{ marginTop: 'var(--space-2)' }}>
+            <button className="btn btn-primary btn-sm" type="submit" disabled={!snapshotText.trim()}>Save snapshot</button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => setShowSnapshotPrompt(false)}>Later</button>
+          </div>
+        </form>
+      )}
+
+      {showParkingLot && (
+        <div className="card card-compact focus-tool-card">
+          <p className="text-sm text-secondary" style={{ marginBottom: 'var(--space-2)' }}>Capture it and return to the task.</p>
+          <form onSubmit={handleParkingSubmit} style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <input className="text-input" value={parkingText} onChange={event => setParkingText(event.target.value)} placeholder="A thought to park..." aria-label="Thought to park" />
+            <button className="btn btn-secondary btn-sm" type="submit">Add</button>
+          </form>
+          {parkingLot.filter(item => item.status === 'open').map(item => (
+            <div key={item.id} className="parking-item">
+              <span>{item.text}</span>
+              <span className="parking-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'completed')}>Done</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'deferred')}>Defer</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => onUpdateParkingItem(item.id, 'deleted')} aria-label={`Delete ${item.text}`}>Delete</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="focus-controls">
         <button 

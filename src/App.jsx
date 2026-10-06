@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
 import { generateTaskBreakdown } from './services/aiService';
 import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
+import { ingestFile } from './engine/ingest';
 import { getSettings } from './services/storageService';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
@@ -48,10 +49,12 @@ function App() {
     }
   }, [session]);
 
-  const handleStartMaterial = useCallback((materialText, duration = 20) => {
-    const plan = buildStudyPlan(materialText, { sessionMinutes: duration });
+  const handleStartMaterial = useCallback((materialText, duration = 20, options = {}) => {
+    const plan = buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText: options.syllabusText });
     const steps = plan.topics.map(topicToStep);
-    session.startNewTask('Study imported material', duration);
+    session.startNewTask('Study imported material', duration, {
+      studyPlan: { ...plan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null },
+    });
     session.setBreakdownSteps(steps.length > 0 ? steps : [{
       title: 'Review imported material',
       description: 'Read the material and identify the first concept to study.',
@@ -59,6 +62,11 @@ function App() {
       completed: false,
     }]);
   }, [session]);
+
+  const handleStartMaterialFile = useCallback(async (file, duration = 20, options = {}) => {
+    const materialText = await ingestFile(file);
+    handleStartMaterial(materialText, duration, options);
+  }, [handleStartMaterial]);
 
   // Handle step completion
   const handleCompleteStep = useCallback(() => {
@@ -124,6 +132,7 @@ function App() {
           <HomeScreen
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
+            onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
           />
         );
@@ -157,6 +166,14 @@ function App() {
             onWhereWasI={handleWhereWasI}
             isPaused={session.view === SESSION_STATES.PAUSED}
             interruptionCount={session.interruptionCount}
+            referenceMode={session.referenceMode}
+            onToggleReferenceMode={session.setReferenceMode}
+            parkingLot={session.parkingLot}
+            onAddParkingItem={session.addParkingItem}
+            onUpdateParkingItem={session.updateParkingItem}
+            onAddSnapshot={session.addSnapshot}
+            sessionStartTime={session.sessionStartTime}
+            onPersistElapsed={session.persistElapsed}
           />
         );
 
@@ -173,6 +190,8 @@ function App() {
             }}
             onChangeTask={() => session.goHome()}
             onWhereWasI={handleWhereWasI}
+            latestSnapshot={session.snapshots[session.snapshots.length - 1]}
+            nextAction={session.steps[session.currentStepIndex]?.nextAction}
           />
         );
 
@@ -186,6 +205,8 @@ function App() {
             onContinue={handleContinueFromContext}
             onReset={handleResetFromContext}
             onGoHome={() => session.goHome()}
+            latestSnapshot={session.snapshots[session.snapshots.length - 1]}
+            nextAction={session.steps[session.currentStepIndex]?.nextAction}
           />
         );
 
@@ -198,6 +219,8 @@ function App() {
             completedSteps={session.completedSteps}
             elapsedSeconds={session.elapsedSeconds}
             interruptionCount={session.interruptionCount}
+            parkingLot={session.parkingLot}
+            onUpdateParkingItem={session.updateParkingItem}
             onSaveReflection={session.saveReflection}
             onStartNextSession={handleStartNextSession}
             onGoHome={() => session.goHome()}
@@ -215,6 +238,7 @@ function App() {
           <HomeScreen
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
+            onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
           />
         );

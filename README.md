@@ -76,6 +76,8 @@ npm install
 
 FocusLoop runs **100% out of the box** in demo mode without any API keys.
 
+When Local mode is active, the client makes zero AI or API requests. The optional connection check is only run after AI-assisted mode is enabled or when you explicitly choose to test the connection. Pasted material and supported files are processed in the browser and are never uploaded by the local study engine.
+
 To enable live Claude AI generation:
 1. Copy `.env.example` to `.env`:
    ```bash

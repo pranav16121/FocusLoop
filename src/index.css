@@ -423,6 +423,37 @@ textarea.text-input {
   transition: width 1s linear;
 }
 
+.focus-session-tools {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+
+.focus-tool-card {
+  width: 100%;
+  max-width: 440px;
+  margin: var(--space-4) auto 0;
+  text-align: left;
+}
+
+.parking-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-sm);
+}
+
+.parking-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
 /* ===== STEPS ===== */
 .step-list {
   list-style: none;
@@ -501,6 +532,44 @@ textarea.text-input {
   color: var(--color-text-tertiary);
   flex-shrink: 0;
   margin-top: 4px;
+}
+
+.step-edit-form {
+  display: flex;
+  align-items: end;
+  gap: var(--space-2);
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.step-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 150px;
+}
+
+.step-edit-time {
+  flex: 0 0 92px;
+  min-width: 92px;
+}
+
+.step-edit-label {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.step-edit-field .text-input {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.step-edit-actions {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
 }
 
 /* ===== BADGES & CHIPS ===== */
@@ -605,6 +674,32 @@ textarea.text-input {
   width: 100%;
   max-width: 480px;
   margin-bottom: var(--space-6);
+}
+
+.material-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  text-align: left;
+}
+
+.material-options .text-input {
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.duration-custom-input {
+  width: 92px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 480px) {
+  .material-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .welcome-philosophy {

@@ -8,14 +8,23 @@ export default function Settings({ onBack }) {
   const [aiStatus, setAiStatus] = useState(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  useEffect(() => {
-    checkAIHealth().then(setAiStatus).catch(() => setAiStatus({ status: 'unavailable', mode: 'offline' }));
-  }, []);
-
   const updateSetting = (key, value) => {
     const updated = { ...settings, [key]: value };
     setSettings(updated);
     saveSettings(updated);
+  };
+
+  const handleAIToggle = (enabled) => {
+    updateSetting('aiEnabled', enabled);
+    if (enabled) {
+      checkAIHealth().then(setAiStatus).catch(() => setAiStatus({ status: 'unavailable', mode: 'offline' }));
+    } else {
+      setAiStatus(null);
+    }
+  };
+
+  const handleTestConnection = () => {
+    checkAIHealth().then(setAiStatus).catch(() => setAiStatus({ status: 'unavailable', mode: 'offline' }));
   };
 
   const handleClearData = () => {
@@ -167,7 +176,7 @@ export default function Settings({ onBack }) {
             <input
               type="checkbox"
               checked={settings.aiEnabled}
-              onChange={(e) => updateSetting('aiEnabled', e.target.checked)}
+              onChange={(e) => handleAIToggle(e.target.checked)}
             />
             <span className="toggle-slider" />
           </label>
@@ -180,6 +189,11 @@ export default function Settings({ onBack }) {
             {!settings.aiEnabled ? '🔒 Local Mode' : aiStatus?.aiAvailable ? '🤖 AI Connected' : aiStatus?.status === 'unavailable' ? '📡 Server Offline' : '🎯 Demo Mode'}
           </span>
         </div>
+        {settings.aiEnabled && (
+          <button className="btn btn-secondary btn-sm" onClick={handleTestConnection}>
+            Test connection
+          </button>
+        )}
         {!settings.aiEnabled && (
           <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
             Local mode is active. Study plans, focus sessions, and review tools do not use an external AI provider.

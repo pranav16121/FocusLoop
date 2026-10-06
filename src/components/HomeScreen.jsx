@@ -3,16 +3,22 @@ import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask } from
 import { formatDate, formatMinutes } from '../utils/formatTime';
 import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 
-const DURATION_PRESETS = [10, 15, 20, 25, 30, 45];
+const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onStartMaterial, onContinueSession }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession }) {
   const [taskInput, setTaskInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
   const [duration, setDuration] = useState(() => getSettings().focusDuration || 20);
+  const [customDuration, setCustomDuration] = useState('');
+  const [syllabusInput, setSyllabusInput] = useState('');
+  const [examDate, setExamDate] = useState('');
+  const [hoursPerDay, setHoursPerDay] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
   const [savedTask, setSavedTask] = useState(() => getCurrentTask());
   const [recentSessions] = useState(() => getSessionHistory().slice(-3).reverse());
+  const [fileError, setFileError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -26,8 +32,32 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onContinueSes
     e.preventDefault();
     const trimmed = materialInput.trim();
     if (trimmed && onStartMaterial) {
-      onStartMaterial(trimmed, duration);
+      setIsParsing(true);
+      Promise.resolve(onStartMaterial(trimmed, customDuration ? Number(customDuration) : duration, {
+        syllabusText: syllabusInput,
+        examDate,
+        hoursPerDay: Number(hoursPerDay) || null,
+      })).finally(() => setIsParsing(false));
     }
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !onStartMaterialFile) return;
+    setFileError('');
+    try {
+      setIsParsing(true);
+      await onStartMaterialFile(file, customDuration ? Number(customDuration) : duration, {
+        syllabusText: syllabusInput,
+        examDate,
+        hoursPerDay: Number(hoursPerDay) || null,
+      });
+    } catch (error) {
+      setFileError(error.message || 'This file could not be read locally.');
+    } finally {
+      setIsParsing(false);
+    }
+    event.target.value = '';
   };
 
   const handleDismissSavedTask = (e) => {
@@ -117,6 +147,32 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onContinueSes
             <p className="text-sm text-tertiary" style={{ textAlign: 'left', marginTop: 'var(--space-2)' }}>
               Processed locally in your browser. Nothing is uploaded. {materialInput.length.toLocaleString()} / {MAX_SOURCE_LENGTH.toLocaleString()} characters
             </p>
+            <label className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-3)', cursor: 'pointer' }}>
+              Choose a file
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.pdf,.docx,.pptx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+            </label>
+            {fileError && <p className="text-sm" style={{ color: 'var(--color-error)', marginTop: 'var(--space-2)' }}>{fileError}</p>}
+            <textarea
+              className="text-input"
+              placeholder="Optional: paste past papers or a syllabus to boost important topics..."
+              value={syllabusInput}
+              onChange={(e) => setSyllabusInput(e.target.value)}
+              rows={3}
+              style={{ marginTop: 'var(--space-4)', resize: 'vertical' }}
+            />
+            <div className="material-options">
+              <label className="text-sm text-secondary">Exam date (optional)
+                <input className="text-input" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
+              </label>
+              <label className="text-sm text-secondary">Hours per day
+                <input className="text-input" type="number" min="0.5" max="16" step="0.5" placeholder="Optional" value={hoursPerDay} onChange={(e) => setHoursPerDay(e.target.value)} />
+              </label>
+            </div>
           </>
         ) : (
         <div className="input-group">
@@ -164,16 +220,26 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onContinueSes
                 {d}m
               </button>
             ))}
+            <input
+              className="text-input duration-custom-input"
+              type="number"
+              min="5"
+              max="120"
+              placeholder="Custom"
+              value={customDuration}
+              onChange={(e) => setCustomDuration(e.target.value)}
+              aria-label="Custom session length in minutes"
+            />
           </div>
         </div>
 
         <button
           type="submit"
           className="btn btn-primary btn-lg btn-block"
-          disabled={inputMode === 'task' ? !taskInput.trim() : !materialInput.trim()}
+          disabled={isParsing || (inputMode === 'task' ? !taskInput.trim() : !materialInput.trim())}
           style={{ marginTop: 'var(--space-6)' }}
         >
-          {inputMode === 'task' ? 'Start Focus' : 'Build Study Plan'}
+          {isParsing ? 'Reading locally...' : inputMode === 'task' ? 'Start Focus' : 'Build Study Plan'}
         </button>
       </form>
 
