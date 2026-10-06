@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getCurrentTask, getSessionHistory, getSettings, clearCurrentTask, getRevisionSchedule } from '../services/storageService';
+import { getCurrentTask, getSessionHistory, getSettings, saveSettings, clearCurrentTask, getRevisionSchedule } from '../services/storageService';
 import { getDueReviews } from '../engine/revision';
 import { formatDate, formatMinutes } from '../utils/formatTime';
 import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
@@ -12,6 +12,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
   const [duration, setDuration] = useState(() => getSettings().focusDuration || 20);
+  const [energy, setEnergy] = useState(() => getSettings().energy || 'medium');
   const [customDuration, setCustomDuration] = useState('');
   const [syllabusInput, setSyllabusInput] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -21,12 +22,18 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
   const [recentSessions] = useState(() => getSessionHistory().slice(-3).reverse());
   const [fileError, setFileError] = useState('');
   const dueReviews = getDueReviews(getRevisionSchedule());
+  const energyDuration = energy === 'low' ? Math.min(duration, 15) : energy === 'high' ? Math.max(duration, 25) : duration;
+  const suggestedTopics = (savedTask?.steps || []).filter(step => {
+    if (energy === 'low') return (step.complexity || 1) <= 2 || ['THEORY', 'DEFINITION'].includes(step.type);
+    if (energy === 'high') return step.type === 'DERIVATION' || (step.complexity || 1) >= 4;
+    return true;
+  }).slice(0, 3);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const trimmed = taskInput.trim();
     if (trimmed) {
-      onStartTask(trimmed, duration);
+      onStartTask(trimmed, energyDuration);
     }
   };
 
@@ -35,7 +42,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
     const trimmed = materialInput.trim();
     if (trimmed && onStartMaterial) {
       setIsParsing(true);
-      Promise.resolve(onStartMaterial(trimmed, customDuration ? Number(customDuration) : duration, {
+      Promise.resolve(onStartMaterial(trimmed, customDuration ? Number(customDuration) : energyDuration, {
         syllabusText: syllabusInput,
         examDate,
         hoursPerDay: Number(hoursPerDay) || null,
@@ -49,7 +56,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
     setFileError('');
     try {
       setIsParsing(true);
-      await onStartMaterialFile(file, customDuration ? Number(customDuration) : duration, {
+      await onStartMaterialFile(file, customDuration ? Number(customDuration) : energyDuration, {
         syllabusText: syllabusInput,
         examDate,
         hoursPerDay: Number(hoursPerDay) || null,
@@ -125,6 +132,21 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
           <div className="continue-label">Today's plan</div>
           <div className="continue-task">Exam plan for {savedTask.studyPlan.examDate}</div>
           <button className="btn btn-secondary btn-sm" onClick={onOpenPlanner}>View daily plan</button>
+        </div>
+      )}
+
+      <div className="energy-selector" role="group" aria-label="Energy mode">
+        <span className="text-sm text-secondary">Energy</span>
+        {['low', 'medium', 'high'].map(level => (
+          <button key={level} className={`chip ${energy === level ? 'selected' : ''}`} onClick={() => { setEnergy(level); saveSettings({ ...getSettings(), energy: level }); }} aria-pressed={energy === level}>{level}</button>
+        ))}
+      </div>
+
+      {savedTask && suggestedTopics.length > 0 && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Today's focus lens</div>
+          <div className="text-sm text-secondary">{energy === 'low' ? 'Gentle review and recall' : energy === 'high' ? 'New and challenging material' : 'A balanced mix'}</div>
+          <div className="energy-topic-list">{suggestedTopics.map(topic => <span className="badge" key={topic.title}>{topic.title}</span>)}</div>
         </div>
       )}
 
