@@ -127,10 +127,10 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
         </div>
       )}
 
-      {savedTask?.studyPlan?.examDate && (
+      {savedTask?.studyPlan && (
         <div className="card card-compact home-plan-card">
           <div className="continue-label">Today's plan</div>
-          <div className="continue-task">Exam plan for {savedTask.studyPlan.examDate}</div>
+          <div className="continue-task">{savedTask.studyPlan.examDate ? `Exam plan for ${savedTask.studyPlan.examDate}` : 'Your next topics are ready to shape'}</div>
           <button className="btn btn-secondary btn-sm" onClick={onOpenPlanner}>View daily plan</button>
         </div>
       )}
@@ -168,7 +168,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
             role="tab"
             aria-selected={inputMode === 'material'}
           >
-            Study pasted material
+            Start new material
           </button>
         </div>
 
