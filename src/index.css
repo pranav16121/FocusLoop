@@ -928,6 +928,79 @@ textarea.text-input {
   text-align: left;
 }
 
+.planner-screen {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: var(--space-6) 0;
+}
+
+.planner-controls {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+
+.planner-controls .text-input {
+  display: block;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.planner-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.planner-adjusted {
+  color: var(--color-accent);
+  text-align: center;
+  margin-bottom: var(--space-3);
+}
+
+.planner-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.planner-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 90px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  text-align: center;
+  font-size: var(--font-size-xs);
+}
+
+.planner-day b {
+  color: var(--color-accent);
+  margin-top: auto;
+}
+
+.planner-day small {
+  color: var(--color-text-tertiary);
+}
+
+.planner-topic-list {
+  margin-bottom: var(--space-4);
+}
+
+.planner-topic-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-light);
+}
+
 .plan-start-area {
   text-align: center;
 }

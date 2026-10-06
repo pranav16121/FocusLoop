@@ -8,6 +8,7 @@ const KEYS = {
   SESSION_HISTORY: 'focusloop_session_history',
   CURRENT_TASK: 'focusloop_current_task',
   REVISION_SCHEDULE: 'focusloop_revision_schedule',
+  EXAM_PLAN: 'focusloop_exam_plan',
 };
 
 function isStorageAvailable() {
@@ -235,6 +236,14 @@ export function getRevisionSchedule() {
 
 export function saveRevisionSchedule(schedule) {
   return safeSet(KEYS.REVISION_SCHEDULE, schedule);
+}
+
+export function getExamPlan() {
+  return safeGet(KEYS.EXAM_PLAN, null);
+}
+
+export function saveExamPlan(plan) {
+  return safeSet(KEYS.EXAM_PLAN, plan);
 }
 
 // Session History

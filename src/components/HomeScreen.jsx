@@ -7,7 +7,7 @@ import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession, onStartRevision }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession, onStartRevision, onOpenPlanner }) {
   const [taskInput, setTaskInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
@@ -117,6 +117,14 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
           <div className="continue-label">Due for revision</div>
           <div className="continue-task">{dueReviews.length} concept{dueReviews.length === 1 ? '' : 's'} ready today</div>
           <button className="btn btn-primary btn-sm" onClick={() => onStartRevision(dueReviews)}>Start revision</button>
+        </div>
+      )}
+
+      {savedTask?.studyPlan?.examDate && (
+        <div className="card card-compact home-plan-card">
+          <div className="continue-label">Today's plan</div>
+          <div className="continue-task">Exam plan for {savedTask.studyPlan.examDate}</div>
+          <button className="btn btn-secondary btn-sm" onClick={onOpenPlanner}>View daily plan</button>
         </div>
       )}
 

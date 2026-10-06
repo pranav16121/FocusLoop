@@ -17,6 +17,8 @@ import RecallReview from './components/RecallReview';
 import RevisionQueue from './components/RevisionQueue';
 import { getRevisionSchedule, saveRevisionSchedule } from './services/storageService';
 import { getDueReviews } from './engine/revision';
+import { saveExamPlan } from './services/storageService';
+import ExamPlanner from './components/ExamPlanner';
 
 function App() {
   const session = useSessionManager();
@@ -116,6 +118,10 @@ function App() {
     session.setView(SESSION_STATES.REVISION);
   }, [session]);
 
+  const handleOpenPlanner = useCallback(() => {
+    session.setView(SESSION_STATES.EXAM_PLANNER);
+  }, [session]);
+
   // Handle starting next session from adaptive recommendation
   const handleStartNextSession = useCallback((recommendedDuration) => {
     session.startFocus(recommendedDuration);
@@ -143,6 +149,7 @@ function App() {
             onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
+            onOpenPlanner={handleOpenPlanner}
           />
         );
 
@@ -201,6 +208,18 @@ function App() {
           <RevisionQueue
             schedule={getDueReviews(getRevisionSchedule())}
             onUpdate={saveRevisionSchedule}
+            onBack={() => session.goHome()}
+          />
+        );
+
+      case SESSION_STATES.EXAM_PLANNER:
+        return (
+          <ExamPlanner
+            topics={session.steps}
+            initialPlan={session.studyPlan?.examPlan}
+            defaultDate={session.studyPlan?.examDate}
+            defaultHours={session.studyPlan?.hoursPerDay}
+            onSave={saveExamPlan}
             onBack={() => session.goHome()}
           />
         );
@@ -269,6 +288,7 @@ function App() {
             onStartMaterialFile={handleStartMaterialFile}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
+            onOpenPlanner={handleOpenPlanner}
           />
         );
     }

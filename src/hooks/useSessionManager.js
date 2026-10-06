@@ -24,6 +24,7 @@ export const SESSION_STATES = {
   REFLECTION: 'reflection',
   RECALL: 'recall',
   REVISION: 'revision',
+  EXAM_PLANNER: 'exam-planner',
   ADAPTIVE: 'adaptive',
   HISTORY: 'history',
   SETTINGS: 'settings',
