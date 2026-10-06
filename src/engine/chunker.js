@@ -5,11 +5,26 @@ import { estimateComplexity, scoreImportance, wordCount } from './score.js';
 const MIN_SECTION_WORDS = 12;
 
 export function normalizeText(text) {
-  return String(text || '')
+  const normalized = String(text || '')
+    .normalize('NFKC')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+    .replace(/[\u00a0\u2007\u202f]/g, ' ')
+    .replace(/(\w)-\n(\w)/g, '$1$2')
+    .replace(/(\w)\n-(\w)/g, '$1$2')
     .replace(/\r\n/g, '\n')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+  const lines = normalized.split('\n');
+  const counts = new Map();
+  lines.forEach(line => {
+    const value = line.trim();
+    if (value && value.length < 100) counts.set(value, (counts.get(value) || 0) + 1);
+  });
+  return lines.filter(line => {
+    const value = line.trim();
+    return !value || (counts.get(value) || 0) < 3;
+  }).join('\n').trim();
 }
 
 function isHeading(line) {

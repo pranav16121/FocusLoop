@@ -11,5 +11,8 @@ test('recall generator creates local cloze and state cards', () => {
   });
   assert.ok(cards.some(card => card.kind === 'cloze'));
   assert.ok(cards.some(card => card.kind === 'state'));
+  const cloze = cards.find(card => card.kind === 'cloze');
+  assert.equal(cloze.answer.length > 4, true);
+  assert.equal(['about', 'after', 'again', 'this', 'that'].includes(cloze.answer), false);
   assert.equal(rateRecallCard(cards[0], 'got-it').status, 'got-it');
 });

@@ -39,3 +39,26 @@ test('corrupted JSON falls back safely and preserves a backup', async () => {
   assert.deepEqual(storage.getCurrentTask(), null);
   assert.ok(localStorage.getItem('focusloop_backup_v1'));
 });
+
+test('migration backup is not overwritten on a second attempt', async () => {
+  const storage = await loadStorage({
+    focusloop_version: '1',
+    focusloop_settings: JSON.stringify({ focusDuration: 25 }),
+  }, 'backup-first');
+  const firstBackup = localStorage.getItem('focusloop_backup_v1');
+  localStorage.setItem('focusloop_version', '1');
+  localStorage.setItem('focusloop_settings', JSON.stringify({ focusDuration: 45 }));
+  await import('../src/services/storageService.js?fixture=backup-second');
+  assert.equal(localStorage.getItem('focusloop_backup_v1'), firstBackup);
+  assert.equal(storage.getSettings().focusDuration, 45);
+});
+
+test('unknown future schema versions are left untouched', async () => {
+  globalThis.localStorage = new MemoryStorage({
+    focusloop_version: '99',
+    focusloop_settings: '{future-format}',
+  });
+  await import('../src/services/storageService.js?fixture=future');
+  assert.equal(localStorage.getItem('focusloop_version'), '99');
+  assert.equal(localStorage.getItem('focusloop_settings'), '{future-format}');
+});

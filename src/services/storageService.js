@@ -56,12 +56,17 @@ function readRaw(key) {
 
 function backupStorage(version) {
   if (!isStorageAvailable()) return null;
+  const backupKey = `focusloop_backup_v${version}`;
+  const existing = localStorage.getItem(backupKey);
+  if (existing !== null) {
+    try { return JSON.parse(existing); } catch { return null; }
+  }
   const backup = {};
   Object.entries(KEYS).forEach(([name, key]) => {
     const raw = localStorage.getItem(key);
     if (raw !== null) backup[name] = raw;
   });
-  safeSet(`focusloop_backup_v${version}`, backup);
+  safeSet(backupKey, backup);
   return backup;
 }
 

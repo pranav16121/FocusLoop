@@ -1,6 +1,6 @@
 // AI Service - abstraction layer for all AI operations
 // The UI interacts with AI through this module, with seamless server API and offline fallbacks
-import { getSettings } from './storageService';
+import { getSettings } from './storageService.js';
 
 const API_BASE = '/api/ai';
 

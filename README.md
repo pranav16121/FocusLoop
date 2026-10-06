@@ -78,6 +78,10 @@ FocusLoop runs **100% out of the box** in demo mode without any API keys.
 
 When Local mode is active, the client makes zero AI or API requests. The optional connection check is only run after AI-assisted mode is enabled or when you explicitly choose to test the connection. Pasted material and supported files are processed in the browser and are never uploaded by the local study engine.
 
+### Hardening notes
+
+Oxlint reports four `react(set-state-in-effect)` warnings: asynchronous plan reveal and group hydration in `TaskBreakdown.jsx`, checklist reset synchronization in `FocusSession.jsx`, and saved-session hydration in `useSessionManager.js`. These effects synchronize local UI state with external/session inputs; none are timer or drift stale-closure warnings. `useTimer` keeps its completion callback in a ref, and `useDriftDetection` includes its signal dependencies.
+
 To enable live Claude AI generation:
 1. Copy `.env.example` to `.env`:
    ```bash

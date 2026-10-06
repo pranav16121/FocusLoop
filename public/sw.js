@@ -1,4 +1,4 @@
-const CACHE_NAME = 'focusloop-shell-v1';
+const CACHE_NAME = 'focusloop-shell-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons.svg'];
 
 self.addEventListener('install', event => {
@@ -7,13 +7,29 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
+  event.waitUntil(caches.keys().then(keys => {
+    const hadOlderCache = keys.some(key => key.startsWith('focusloop-shell-') && key !== CACHE_NAME);
+    return Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))).then(() => hadOlderCache);
+  }).then(hadOlderCache => hadOlderCache ? self.clients.matchAll({ type: 'window' }) : []).then(clients => clients.forEach(client => client.postMessage({ type: 'NEW_VERSION' }))));
   self.clients.claim();
+});
+
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).pathname.startsWith('/api/')) return;
+  const url = new URL(request.url);
+  if (request.mode === 'navigate' || url.pathname === '/index.html') {
+    event.respondWith(fetch(request).then(response => {
+      const copy = response.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy));
+      return response;
+    }).catch(() => caches.match('/index.html')));
+    return;
+  }
   event.respondWith(caches.match(request).then(cached => cached || fetch(request).then(response => {
     const copy = response.clone();
     caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
