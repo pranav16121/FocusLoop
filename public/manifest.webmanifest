@@ -1,0 +1,17 @@
+{
+  "name": "FocusLoop",
+  "short_name": "FocusLoop",
+  "description": "When you lose focus, do not lose context.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f6f3",
+  "theme_color": "#4a7c6f",
+  "icons": [
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
