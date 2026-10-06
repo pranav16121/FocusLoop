@@ -81,9 +81,9 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
 
   return (
     <div className="welcome-section animate-fade-in">
-      <h1 className="welcome-tagline">Get back to what matters.</h1>
+      <h1 className="welcome-tagline">FocusLoop - When you lose focus, do not lose context.</h1>
       <p className="welcome-subtitle">
-        Focus on one small step. If you drift, we'll help you pick it back up.
+        One calm next step, local study tools, and a gentle way back when context slips.
       </p>
 
       {savedTask && (
@@ -305,8 +305,8 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
       )}
 
       <p className="welcome-philosophy">
-        FocusLoop doesn't punish distraction.<br />
-        It helps you return.
+        Choose material. Shape a plan. Focus, recover, and keep going.<br />
+        Your files never leave your device. FocusLoop is not a medical device.
       </p>
     </div>
   );

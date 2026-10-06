@@ -2,7 +2,7 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 > **Get back to what matters.**  
-> An ADHD-friendly focus companion designed around **gentle context recovery** instead of punishment.
+> A calm focus companion designed around **gentle context recovery** instead of punishment.
 
 Official website: [focus-loop.tech](https://www.focus-loop.tech)
 
@@ -14,7 +14,7 @@ Currently, two official plugins are available:
 ## 💡 The Core Problem & Philosophy
 
 ## React Compiler
-People with ADHD often know exactly what they need to do, but during a work session they lose focus, switch tabs, get distracted, or lose their working memory of what they were just doing.
+People can know exactly what they need to do, yet still lose their working context during a work session.
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 Traditional productivity tools punish distraction with red streaks, guilt-inducing alerts ("You failed!", "You got distracted again"), or rigid Pomodoro timers.
