@@ -220,6 +220,7 @@ function App() {
             onUpdateParkingItem={session.updateParkingItem}
             onAddSnapshot={session.addSnapshot}
             sessionStartTime={session.sessionStartTime}
+            elapsedSeconds={session.elapsedSeconds}
             onPersistElapsed={session.persistElapsed}
           />
         );

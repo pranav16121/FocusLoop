@@ -13,6 +13,7 @@ import {
 } from '../services/storageService';
 import { generateRecallCards, rateRecallCard } from '../engine/recall';
 import { scheduleNextReview } from '../engine/revision';
+import { startClock, pauseClock, resumeClock, clockElapsed } from '../engine/sessionClock';
 
 export const SESSION_STATES = {
   IDLE: 'idle',
@@ -40,6 +41,8 @@ export function useSessionManager() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [sessionDuration, setSessionDuration] = useState(20);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+  // Elapsed seconds frozen by an explicit user pause; null while the clock runs.
+  const [pausedElapsed, setPausedElapsed] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [completedSteps, setCompletedSteps] = useState(0);
   const [interruptionCount, setInterruptionCount] = useState(0);
@@ -63,11 +66,13 @@ export function useSessionManager() {
       setSteps(savedTask.steps || []);
       setCurrentStepIndex(savedTask.currentStepIndex || 0);
       setSessionDuration(sessionData.duration || 20);
-      const timestampElapsed = sessionData.state === SESSION_STATES.FOCUS && sessionData.startTime
-        ? Math.max(0, Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000))
-        : 0;
-      setElapsedSeconds(Math.max(sessionData.elapsed || 0, timestampElapsed));
+      // A paused session stays frozen; any other running state counts time away as elapsed.
+      const wasPaused = sessionData.state === SESSION_STATES.PAUSED;
+      const restoredPause = wasPaused ? (sessionData.pausedElapsed ?? sessionData.elapsed ?? 0) : null;
+      const restoredElapsed = clockElapsed({ startTime: sessionData.startTime, pausedElapsed: restoredPause });
+      setElapsedSeconds(Math.max(wasPaused ? 0 : (sessionData.elapsed || 0), restoredElapsed));
       setSessionStartTime(sessionData.startTime || null);
+      setPausedElapsed(restoredPause);
       setCompletedSteps(savedTask.completedSteps || 0);
       setInterruptionCount(sessionData.interruptions || 0);
       setReferenceMode(sessionData.referenceMode === true);
@@ -76,7 +81,7 @@ export function useSessionManager() {
       setStudyPlan(savedTask.studyPlan || sessionData.studyPlan || null);
       setRecallCards(sessionData.recallCards || []);
       // Don't auto-resume to focus, go to context recovery
-      if (sessionData.state === SESSION_STATES.FOCUS || sessionData.state === SESSION_STATES.PAUSED) {
+      if ([SESSION_STATES.FOCUS, SESSION_STATES.PAUSED, SESSION_STATES.DRIFT, SESSION_STATES.CONTEXT_RECOVERY].includes(sessionData.state)) {
         setView(SESSION_STATES.CONTEXT_RECOVERY);
       } else if (savedSession.state === SESSION_STATES.BREAKDOWN) {
         setView(SESSION_STATES.BREAKDOWN);
@@ -93,6 +98,7 @@ export function useSessionManager() {
     const nextElapsed = snapshot.elapsed ?? elapsedSeconds;
     const nextInterruptions = snapshot.interruptions ?? interruptionCount;
     const nextStartTime = snapshot.startTime ?? sessionStartTime;
+    const nextPausedElapsed = snapshot.pausedElapsed !== undefined ? snapshot.pausedElapsed : pausedElapsed;
     const nextReferenceMode = snapshot.referenceMode ?? referenceMode;
     const nextParkingLot = snapshot.parkingLot ?? parkingLot;
     const nextSnapshots = snapshot.snapshots ?? snapshots;
@@ -115,13 +121,14 @@ export function useSessionManager() {
       elapsed: nextElapsed,
       interruptions: nextInterruptions,
       startTime: nextStartTime,
+      pausedElapsed: nextPausedElapsed,
       referenceMode: nextReferenceMode,
       parkingLot: nextParkingLot,
       snapshots: nextSnapshots,
       studyPlan: nextStudyPlan,
       recallCards: nextRecallCards,
     });
-  }, [task, steps, currentStepIndex, completedSteps, view, sessionDuration, elapsedSeconds, interruptionCount, sessionStartTime, referenceMode, parkingLot, snapshots, studyPlan, recallCards]);
+  }, [task, steps, currentStepIndex, completedSteps, view, sessionDuration, elapsedSeconds, interruptionCount, sessionStartTime, pausedElapsed, referenceMode, parkingLot, snapshots, studyPlan, recallCards]);
   
   const startNewTask = useCallback((taskText, duration = 20, metadata = {}) => {
     setTask(taskText);
@@ -154,24 +161,33 @@ export function useSessionManager() {
     const nextDuration = durationOverride || sessionDuration;
     setSessionDuration(nextDuration);
     setElapsedSeconds(0);
-    const now = new Date().toISOString();
-    setSessionStartTime(now);
+    const clock = startClock();
+    setSessionStartTime(clock.startTime);
+    setPausedElapsed(null);
     startTimeRef.current = Date.now();
     setView(SESSION_STATES.FOCUS);
-    persistState(SESSION_STATES.FOCUS, { duration: nextDuration, elapsed: 0, startTime: now });
+    persistState(SESSION_STATES.FOCUS, { duration: nextDuration, elapsed: 0, startTime: clock.startTime, pausedElapsed: null });
   }, [persistState, sessionDuration]);
   
   const pauseSession = useCallback((actualElapsed) => {
+    const clock = pauseClock({ startTime: sessionStartTime, pausedElapsed });
+    const frozen = actualElapsed ?? clock.pausedElapsed;
+    setPausedElapsed(frozen);
+    setElapsedSeconds(frozen);
     setView(SESSION_STATES.PAUSED);
-    persistState(SESSION_STATES.PAUSED, { elapsed: actualElapsed ?? elapsedSeconds });
-  }, [persistState, elapsedSeconds]);
-  
+    persistState(SESSION_STATES.PAUSED, { elapsed: frozen, pausedElapsed: frozen });
+  }, [persistState, sessionStartTime, pausedElapsed]);
+
+  // Used by Pause→Resume and by every "Continue" (drift card, "Where was I?").
+  // A running clock is left untouched, so the start timestamp, elapsed time and progress survive.
   const resumeSession = useCallback(() => {
-    const rebasedStartTime = new Date(Date.now() - (elapsedSeconds * 1000)).toISOString();
-    setSessionStartTime(rebasedStartTime);
+    const clock = resumeClock({ startTime: sessionStartTime, pausedElapsed });
+    setSessionStartTime(clock.startTime);
+    setPausedElapsed(null);
+    setElapsedSeconds(clockElapsed(clock));
     setView(SESSION_STATES.FOCUS);
-    persistState(SESSION_STATES.FOCUS, { startTime: rebasedStartTime });
-  }, [persistState, elapsedSeconds]);
+    persistState(SESSION_STATES.FOCUS, { startTime: clock.startTime, pausedElapsed: null, elapsed: clockElapsed(clock) });
+  }, [persistState, sessionStartTime, pausedElapsed]);
   
   const completeStep = useCallback((actualElapsed = elapsedSeconds) => {
     const newCompleted = completedSteps + 1;
@@ -212,9 +228,8 @@ export function useSessionManager() {
   }, [persistState, elapsedSeconds]);
   
   const continueFromDrift = useCallback(() => {
-    setView(SESSION_STATES.FOCUS);
-    persistState(SESSION_STATES.FOCUS);
-  }, [persistState]);
+    resumeSession();
+  }, [resumeSession]);
 
   const rateRecall = useCallback((cardId, rating) => {
     const nextCards = recallCards.map(card => card.id === cardId ? rateRecallCard(card, rating) : card);

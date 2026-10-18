@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTimer } from '../hooks/useTimer';
+import { clockRemaining } from '../engine/sessionClock';
 import { useDriftDetection } from '../hooks/useDriftDetection';
 import { getLocalNextAction } from '../algorithms/studyEngine';
 import { getSettings } from '../services/storageService';
@@ -19,6 +20,7 @@ export default function FocusSession({
   isPaused,
   interruptionCount,
   elapsedSeconds,
+  sessionStartTime,
   referenceMode,
   onToggleReferenceMode,
   parkingLot,
@@ -50,12 +52,16 @@ export default function FocusSession({
     active: !isPaused && timer.isRunning,
     paused: isPaused,
     referenceMode,
-    onRecovery: (data) => onDrift(drift.interruptionCount + 1, { ...data, elapsed: elapsedRef.current }),
+    onRecovery: (data) => onDrift((interruptionCount || 0) + 1, { ...data, elapsed: elapsedRef.current }),
   });
 
-  // Start timer on mount
+  // Start timer on mount from the session clock (start timestamp), not from zero:
+  // remounting after a drift card or "Where was I?" must keep the elapsed time.
   useEffect(() => {
-    timer.start(Math.max(0, (sessionDuration * 60) - (elapsedSeconds || 0)));
+    const clock = sessionStartTime && !isPaused
+      ? { startTime: sessionStartTime, pausedElapsed: null }
+      : { startTime: null, pausedElapsed: elapsedSeconds || 0 };
+    timer.start(clockRemaining(clock, sessionDuration * 60));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track elapsed
@@ -75,7 +81,8 @@ export default function FocusSession({
   useEffect(() => {
     if (drift.isDrifting && drift.driftData) {
       timer.pause();
-      onDrift(drift.interruptionCount, { ...drift.driftData, elapsed: elapsedRef.current });
+      // The drift hook's own counter restarts on remount; the session count is the source of truth.
+      onDrift((interruptionCount || 0) + 1, { ...drift.driftData, elapsed: elapsedRef.current });
     }
   }, [drift.isDrifting, drift.driftData]); // eslint-disable-line react-hooks/exhaustive-deps
 
