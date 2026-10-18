@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
-import { generateTaskBreakdown } from './services/aiService';
+import { generateTaskBreakdown, generateStudyPlan } from './services/aiService';
 import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
 import { ingestFile } from './engine/ingest';
 import { getSettings } from './services/storageService';
@@ -57,21 +57,36 @@ function App() {
 
   const handleStartMaterial = useCallback((materialText, duration = 20, options = {}) => {
     const plan = buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText: options.syllabusText });
-    const steps = plan.topics.map(topicToStep);
     session.startNewTask('Study imported material', duration, {
       studyPlan: { ...plan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null },
     });
-    session.setBreakdownSteps(steps.length > 0 ? steps : [{
-      title: 'Review imported material',
-      description: 'Read the material and identify the first concept to study.',
-      estimatedMinutes: duration,
-      completed: false,
-    }]);
+    return generateStudyPlan(materialText, { duration, syllabusText: options.syllabusText }).then((aiPlan) => {
+      const nextPlan = aiPlan ? { ...plan, ...aiPlan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null } : plan;
+      const steps = aiPlan?.topics?.map(topic => ({
+        ...topic,
+        title: topic.title,
+        description: topic.description,
+        completed: false,
+      })) || plan.topics.map(topicToStep);
+      session.setBreakdownSteps(steps.length > 0 ? steps : [{
+        title: 'Review imported material',
+        description: 'Read the material and identify the first concept to study.',
+        estimatedMinutes: duration,
+        completed: false,
+      }]);
+      session.updateStudyPlan(nextPlan);
+    });
   }, [session]);
 
   const handleStartMaterialFile = useCallback(async (file, duration = 20, options = {}) => {
     const materialText = await ingestFile(file);
-    handleStartMaterial(materialText, duration, options);
+    return handleStartMaterial(materialText, duration, options);
+  }, [handleStartMaterial]);
+
+  const handleStartMaterialFiles = useCallback(async (files, duration = 20, options = {}) => {
+    const materials = await Promise.all(files.map(file => ingestFile(file)));
+    const combinedMaterial = materials.map((text, index) => `# File ${index + 1}\n${text}`).join('\n\n');
+    return handleStartMaterial(combinedMaterial, duration, options);
   }, [handleStartMaterial]);
 
   // Handle step completion
@@ -147,6 +162,7 @@ function App() {
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
             onStartMaterialFile={handleStartMaterialFile}
+            onStartMaterialFiles={handleStartMaterialFiles}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}
@@ -163,6 +179,7 @@ function App() {
             onStartFocus={handleStartFocus}
             onBack={() => session.goHome()}
             onUpdateSteps={(newSteps) => session.setBreakdownSteps(newSteps)}
+            studyPlan={session.studyPlan}
           />
         );
 
@@ -286,6 +303,7 @@ function App() {
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
             onStartMaterialFile={handleStartMaterialFile}
+            onStartMaterialFiles={handleStartMaterialFiles}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}

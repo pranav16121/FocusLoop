@@ -4,12 +4,12 @@ import { getSettings } from './storageService.js';
 
 const API_BASE = '/api/ai';
 
-async function fetchAPI(endpoint, data) {
+async function fetchAPI(endpoint, data, timeout = 4000) {
   if (!getSettings().aiEnabled) return null;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     const response = await fetch(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,6 +27,10 @@ async function fetchAPI(endpoint, data) {
     // Graceful fallback to client deterministic responses
     return null;
   }
+}
+
+export async function generateStudyPlan(materialText, options = {}) {
+  return fetchAPI('/study-plan', { materialText, options }, 30000);
 }
 
 // Client-side fallback when backend is unavailable

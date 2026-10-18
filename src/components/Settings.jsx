@@ -162,6 +162,19 @@ export default function Settings({ onBack }) {
       </div>
 
       <div className="card" style={{ marginBottom: 'var(--space-4)' }}>
+        <h3 className="heading-3" style={{ marginBottom: 'var(--space-2)' }}>Visual Focus Assist</h3>
+        <p className="text-sm text-tertiary" style={{ marginBottom: 'var(--space-3)' }}>Optional local signals from your camera, browser tabs, and the Windows companion. It never records video, identifies you, or decides what you are thinking.</p>
+        <div className="settings-row">
+          <div><div className="settings-label">Enable visual monitoring</div><div className="text-sm text-tertiary">Camera access is requested only when you start a focus session.</div></div>
+          <label className="toggle"><input type="checkbox" checked={settings.visualFocusEnabled} onChange={e => updateSetting('visualFocusEnabled', e.target.checked)} /><span className="toggle-slider" /></label>
+        </div>
+        <div className="settings-row"><div><div className="settings-label">Sensitivity</div><div className="text-sm text-tertiary">Conservative by default; sustained signals only.</div></div><select className="select" value={settings.visualSensitivity} onChange={e => updateSetting('visualSensitivity', e.target.value)}><option value="gentle">Gentle</option><option value="balanced">Balanced</option><option value="responsive">Responsive</option></select></div>
+        <div className="settings-row"><div><div className="settings-label">Camera inference rate</div><div className="text-sm text-tertiary">Lower rates use less CPU.</div></div><select className="select" value={settings.visualInferenceFps} onChange={e => updateSetting('visualInferenceFps', Number(e.target.value))}><option value={2}>2 fps</option><option value={3}>3 fps</option><option value={5}>5 fps</option></select></div>
+        <div className="settings-row"><div><div className="settings-label">Trusted/reference sites</div><div className="text-sm text-tertiary">One hostname per line; these do not trigger return suggestions.</div></div><textarea className="text-input" rows="3" value={(settings.trustedSites || []).join('\n')} onChange={e => updateSetting('trustedSites', e.target.value.split(/\n/).map(s => s.trim()).filter(Boolean))} /></div>
+        <p className="text-sm text-tertiary">Camera detection runs in this page after you start a session and approve permission. It works without an extension; keeping the study page open is required.</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 'var(--space-4)' }}>
         <h3 className="heading-3" style={{ marginBottom: 'var(--space-4)' }}>Appearance</h3>
 
         <div className="settings-row">
@@ -245,7 +258,7 @@ export default function Settings({ onBack }) {
         )}
         {settings.aiEnabled && !aiStatus?.aiAvailable && (
           <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-2)' }}>
-            AI features are using demo responses. Add an ANTHROPIC_API_KEY to the server .env to enable real AI.
+            AI features are using demo responses. Add a GEMINI_API_KEY to the server .env to enable Gemini study summaries.
           </p>
         )}
       </div>

@@ -13,10 +13,12 @@ app.use(express.json());
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const provider = process.env.GEMINI_API_KEY ? 'Gemini' : process.env.ANTHROPIC_API_KEY ? 'Anthropic' : null;
   res.json({
     status: 'ok',
-    aiAvailable: !!process.env.ANTHROPIC_API_KEY,
-    mode: process.env.ANTHROPIC_API_KEY ? 'ai' : 'demo'
+    aiAvailable: Boolean(provider),
+    provider,
+    mode: provider ? 'ai' : 'demo'
   });
 });
 
@@ -25,5 +27,5 @@ app.use('/api/ai', aiRoutes);
 
 app.listen(PORT, () => {
   console.log(`FocusLoop server running on port ${PORT}`);
-  console.log(`AI mode: ${process.env.ANTHROPIC_API_KEY ? 'Anthropic API' : 'Demo/Fallback'}`);
+  console.log(`AI mode: ${process.env.GEMINI_API_KEY ? 'Gemini API' : process.env.ANTHROPIC_API_KEY ? 'Anthropic API' : 'Demo/Fallback'}`);
 });

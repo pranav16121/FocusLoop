@@ -59,7 +59,7 @@ ADAPTIVE NEXT SESSION (Smart duration recommendation for the next micro-step)
 - **Frontend:** React 19 + Vite 8
 - **Styling:** Custom Warm-Neutral Design System (`src/index.css`) with light/dark theme support, reduced-motion compatibility, and high-contrast typography.
 - **Backend:** Node.js + Express (`server/`)
-- **AI Integration:** Isolated service provider (`anthropicService.js`) with deterministic fallback (`demoService.js`) and client-side offline redundancy (`aiService.js`).
+- **AI Integration:** Optional Gemini study summaries and topic plans, with existing Anthropic focus helpers and deterministic local fallbacks.
 - **Persistence:** LocalStorage with schema versioning and zero-loss state recovery.
 
 ---
@@ -76,23 +76,25 @@ npm install
 
 FocusLoop runs **100% out of the box** in demo mode without any API keys.
 
-When Local mode is active, the client makes zero AI or API requests. The optional connection check is only run after AI-assisted mode is enabled or when you explicitly choose to test the connection. Pasted material and supported files are processed in the browser and are never uploaded by the local study engine.
+When Local mode is active, the client makes zero AI or API requests. The optional connection check is only run after AI-assisted mode is enabled or when you explicitly choose to test the connection. Pasted material and supported files are processed in the browser; AI-assisted mode sends extracted material to the configured Gemini server.
 
 ### Hardening notes
 
 Oxlint reports four `react(set-state-in-effect)` warnings: asynchronous plan reveal and group hydration in `TaskBreakdown.jsx`, checklist reset synchronization in `FocusSession.jsx`, and saved-session hydration in `useSessionManager.js`. These effects synchronize local UI state with external/session inputs; none are timer or drift stale-closure warnings. `useTimer` keeps its completion callback in a ref, and `useDriftDetection` includes its signal dependencies.
 
-To enable live Claude AI generation:
+To enable Gemini study summaries for imported material:
 1. Copy `.env.example` to `.env`:
    ```bash
    cp .env.example .env
    ```
-2. Add your Anthropic API key:
+2. Add your Gemini API key:
    ```env
-   ANTHROPIC_API_KEY=your_key_here
-   ANTHROPIC_MODEL=claude-sonnet-4-20250514
+   GEMINI_API_KEY=your_key_here
+   GEMINI_MODEL=gemini-2.5-flash
    PORT=3001
    ```
+
+Enable **AI-assisted** mode in Settings, then choose one or more TXT, Markdown, PDF, DOCX, or PPTX files. FocusLoop extracts their text in your browser and sends the combined material to Gemini for a summary, study advice, and prioritized topics. Keep Local-only mode enabled when you do not want material sent to an AI provider.
 
 ### 3. Run the Development Server
 
@@ -162,3 +164,36 @@ Follow this script to demonstrate the full end-to-end loop:
 ## 🔒 Privacy & Safety Notice
 
 FocusLoop is designed as a compassionate personal focus companion. It is **not** a medical device, does not diagnose or treat ADHD or any other medical condition, and collects zero surveillance or biometric data.
+# Visual Focus Assist (optional, local-first)
+
+FocusLoop can combine conservative, observable signals to offer its existing context-recovery flow. It is off by default. Enable it in **Settings → Visual Focus Assist**, then start a focus session. It never records or uploads video, recognizes identity, reads window titles, collects keystrokes, or sends camera data to an AI provider. A camera light/status is shown while the pipeline is active; pause/end session stops the extension pipeline immediately.
+
+The decision engine is in `shared/focusEngine.js`. It requires sustained signals and cooldowns, respects Reference Mode and trusted domains, and says only that attention *may* have shifted. If the extension, camera, model, or companion is unavailable, the study timer and all existing FocusLoop features still work.
+
+## Browser extension (Chrome / Edge)
+
+1. Run `npm run extension:assets` after `npm install`.
+2. Obtain the pinned official MediaPipe model with `powershell -ExecutionPolicy Bypass -File extension/download-model.ps1`. The script verifies SHA-256 `64184E229B263107BC2B804C6625DB1341FF2BB731874B0BCC2FE6544E0BC9FF` and refuses to retain a mismatched asset. This explicit local asset is required; the extension never downloads a model at runtime.
+3. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the `extension` directory.
+4. Run `npm run dev`, visit the local app, opt in from Settings, and start a session.
+
+The MV3 service worker tracks tab/window transitions and uses an offscreen document for the optional camera pipeline. Permissions are `tabs`, `windows`, `offscreen`, `storage`, and `nativeMessaging`, used for tab duration, browser focus, camera lifecycle, extension state, and the opt-in companion. It is restricted to local FocusLoop development origins. The status line truthfully reports model loading/missing, permission required/denied, unavailable, active, or stopped. Browser suspension or extension reload can interrupt processing; the extension reports that condition and recovers only after a new session command.
+
+## Windows companion
+
+The companion is a Chrome/Edge Native Messaging host. It uses Windows foreground-window/process APIs and sends only executable identity plus duration; it has no screen, title, input, or content access. Build it with:
+
+```powershell
+cd desktop-companion
+cargo build --release
+```
+
+After loading the unpacked extension, copy its ID from the extension details page and register the host (use the Chrome and Edge IDs independently):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop-companion/install-native-host.ps1 -ChromeExtensionId YOUR_CHROME_ID -EdgeExtensionId YOUR_EDGE_ID
+```
+
+Restart the browser after registration. The extension opens the authenticated native connection only during an opted-in active session and forwards foreground-app events to the same focus engine used for camera/tab signals. The FocusSession status line shows `Companion connected`, `paused`, or `disconnected`. To remove registration, run `desktop-companion/uninstall-native-host.ps1`.
+
+Troubleshooting: `model-missing` means the verified task asset is absent; `permission-denied` must be resolved through the browser site/extension camera prompt; `unavailable` covers camera disconnection or lifecycle failure; `Companion disconnected` means the Rust binary, host manifest, browser restart, or extension ID registration needs attention.

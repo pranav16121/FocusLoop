@@ -7,7 +7,7 @@ import { MAX_SOURCE_LENGTH } from '../algorithms/studyEngine';
 const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 const SAMPLE_PROMPT = "Study Network Analysis for tomorrow's exam";
 
-export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onContinueSession, onStartRevision, onOpenPlanner }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onStartMaterialFile, onStartMaterialFiles, onContinueSession, onStartRevision, onOpenPlanner }) {
   const [taskInput, setTaskInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
@@ -51,12 +51,13 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
   };
 
   const handleFileChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file || !onStartMaterialFile) return;
+    const files = [...(event.target.files || [])];
+    if (files.length === 0 || (!onStartMaterialFile && !onStartMaterialFiles)) return;
     setFileError('');
     try {
       setIsParsing(true);
-      await onStartMaterialFile(file, customDuration ? Number(customDuration) : energyDuration, {
+      const callback = files.length > 1 && onStartMaterialFiles ? onStartMaterialFiles : onStartMaterialFile;
+      await callback(files.length > 1 ? files : files[0], customDuration ? Number(customDuration) : energyDuration, {
         syllabusText: syllabusInput,
         examDate,
         hoursPerDay: Number(hoursPerDay) || null,
@@ -188,9 +189,10 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onStartMateri
               Processed locally in your browser. Nothing is uploaded. {materialInput.length.toLocaleString()} / {MAX_SOURCE_LENGTH.toLocaleString()} characters
             </p>
             <label className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-3)', cursor: 'pointer' }}>
-              Choose a file
+              Choose files
               <input
                 type="file"
+                multiple
                 accept=".txt,.md,.markdown,.pdf,.docx,.pptx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
