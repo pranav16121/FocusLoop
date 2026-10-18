@@ -897,7 +897,7 @@ textarea.text-input {
   margin-top: var(--space-5);
 }
 
-.recall-screen {
+.revision-screen {
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
@@ -905,51 +905,29 @@ textarea.text-input {
   text-align: center;
 }
 
-.recall-card {
-  width: 100%;
-  min-height: 240px;
-  margin: var(--space-6) 0;
-  padding: var(--space-8);
+.revision-list {
+  list-style: none;
+  margin: var(--space-5) 0;
+  padding: 0;
+  text-align: left;
+}
+
+.revision-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-2);
 }
 
-.recall-card strong {
-  font-size: var(--font-size-xl);
+.revision-title {
+  font-weight: 600;
 }
 
-.recall-card span:not(.recall-kind) {
-  max-width: 360px;
-  font-size: var(--font-size-lg);
-  line-height: 1.5;
-}
-
-.recall-kind {
-  color: var(--color-accent);
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-}
-
-.recall-card small {
-  color: var(--color-text-tertiary);
-}
-
-.recall-actions {
+.revision-actions {
   display: flex;
-  justify-content: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-3);
+  flex-shrink: 0;
 }
 
 .home-plan-card {

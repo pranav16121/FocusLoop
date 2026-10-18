@@ -1,6 +1,7 @@
 // Storage Service - localStorage persistence with versioning
+import { toReminders } from '../engine/revision.js';
 
-const STORAGE_VERSION = 3;
+const STORAGE_VERSION = 4;
 const KEYS = {
   VERSION: 'focusloop_version',
   SETTINGS: 'focusloop_settings',
@@ -148,6 +149,25 @@ function migrateV2ToV3() {
   if (!Array.isArray(safeGet(KEYS.REVISION_SCHEDULE, null))) safeSet(KEYS.REVISION_SCHEDULE, []);
 }
 
+// v4 removed Quick recall: drop recall decks/ratings and keep revision as topic reminders.
+function stripRecall(record) {
+  if (!record || typeof record !== 'object') return record;
+  const next = { ...record };
+  delete next.recallCards;
+  delete next.revisionSchedule;
+  return next;
+}
+
+function migrateV3ToV4() {
+  const currentTask = safeGet(KEYS.CURRENT_TASK, null);
+  if (currentTask) saveCurrentTask(stripRecall(currentTask));
+  const currentSession = safeGet(KEYS.CURRENT_SESSION, null);
+  if (currentSession) saveCurrentSession(stripRecall(currentSession));
+  const history = safeGet(KEYS.SESSION_HISTORY, []);
+  if (Array.isArray(history)) safeSet(KEYS.SESSION_HISTORY, history.map(stripRecall));
+  safeSet(KEYS.REVISION_SCHEDULE, toReminders(safeGet(KEYS.REVISION_SCHEDULE, [])));
+}
+
 function migrateStorage() {
   const versionRecord = readRaw(KEYS.VERSION);
   const storedVersion = versionRecord.corrupted ? 0 : Number(versionRecord.value || 0);
@@ -158,6 +178,7 @@ function migrateStorage() {
     for (let version = storedVersion; version < STORAGE_VERSION; version += 1) {
       if (version === 0 || version === 1) migrateV1ToV2();
       if (version === 2) migrateV2ToV3();
+      if (version === 3) migrateV3ToV4();
     }
     safeSet(KEYS.VERSION, STORAGE_VERSION);
   } catch (error) {
@@ -227,8 +248,6 @@ export function getSessionDefaults(session = {}) {
     parkingLot: [],
     snapshots: [],
     studyPlan: null,
-    recallCards: [],
-    revisionSchedule: [],
     examPlan: null,
     ...session,
   };
@@ -274,10 +293,11 @@ export function importData(data) {
   }
   backupStorage(STORAGE_VERSION);
   if (data.settings && typeof data.settings === 'object') saveSettings(data.settings);
-  if (data.currentTask) saveCurrentTask(data.currentTask);
-  if (data.currentSession) saveCurrentSession(data.currentSession);
-  safeSet(KEYS.SESSION_HISTORY, data.sessionHistory);
-  saveRevisionSchedule(Array.isArray(data.revisionSchedule) ? data.revisionSchedule : []);
+  // Backups from any schema version import: recall data is dropped, revision entries converted.
+  if (data.currentTask) saveCurrentTask(stripRecall(data.currentTask));
+  if (data.currentSession) saveCurrentSession(stripRecall(data.currentSession));
+  safeSet(KEYS.SESSION_HISTORY, (data.sessionHistory || []).map(stripRecall));
+  saveRevisionSchedule(toReminders(data.revisionSchedule));
   saveExamPlan(data.examPlan || null);
   safeSet(KEYS.VERSION, STORAGE_VERSION);
   return true;

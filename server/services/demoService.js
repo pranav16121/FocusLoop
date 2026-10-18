@@ -71,7 +71,7 @@ export function demoNextAction(task, steps, currentStepIndex) {
     return { nextAction: 'Write the KCL equation for the first node.' };
   }
   if (title.includes('review kcl')) {
-    return { nextAction: 'Recall the core rule: current entering a node equals current leaving.' };
+    return { nextAction: 'Write down the core rule: current entering a node equals current leaving.' };
   }
   if (title.includes('kcl example 2') || title.includes('example 2')) {
     return { nextAction: 'Select the reference node and label each unknown node voltage.' };

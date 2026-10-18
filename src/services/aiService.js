@@ -116,7 +116,7 @@ export async function generateNextAction(task, steps, currentStepIndex) {
     return { nextAction: 'Write the KCL equation for the first node.' };
   }
   if (title.includes('review kcl')) {
-    return { nextAction: 'Recall the core rule: sum of currents entering a node equals sum leaving.' };
+    return { nextAction: 'Write down the core rule: sum of currents entering a node equals sum leaving.' };
   }
   if (title.includes('kcl example 2') || title.includes('example 2')) {
     return { nextAction: 'Select reference ground and identify unknown node voltages.' };

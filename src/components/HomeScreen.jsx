@@ -315,9 +315,9 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles
 
       {dueReviews.length > 0 && (
         <div className="card card-compact home-plan-card">
-          <div className="continue-label">Due for revision</div>
-          <div className="continue-task">{dueReviews.length} concept{dueReviews.length === 1 ? '' : 's'} ready today</div>
-          <button className="btn btn-primary btn-sm" onClick={() => onStartRevision(dueReviews)}>Start revision</button>
+          <div className="continue-label">Revisit this topic</div>
+          <div className="continue-task">{dueReviews.length} topic{dueReviews.length === 1 ? '' : 's'} to revisit today</div>
+          <button className="btn btn-primary btn-sm" onClick={() => onStartRevision(dueReviews)}>Revisit now</button>
         </div>
       )}
 
@@ -332,7 +332,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles
       {savedTask && suggestedTopics.length > 0 && (
         <div className="card card-compact home-plan-card">
           <div className="continue-label">Today's focus lens</div>
-          <div className="text-sm text-secondary">{energy === 'low' ? 'Gentle review and recall' : energy === 'high' ? 'New and challenging material' : 'A balanced mix'}</div>
+          <div className="text-sm text-secondary">{energy === 'low' ? 'Gentle review' : energy === 'high' ? 'New and challenging material' : 'A balanced mix'}</div>
           <div className="energy-topic-list">{suggestedTopics.map(topic => <span className="badge" key={topic.title}>{topic.title}</span>)}</div>
         </div>
       )}

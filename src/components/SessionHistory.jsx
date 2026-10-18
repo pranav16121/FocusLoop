@@ -101,11 +101,6 @@ export default function SessionHistory({ onBack }) {
                       )}
                     </div>
                   )}
-                  {session.recallCards?.length > 0 && (
-                    <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-3)' }}>
-                      {session.recallCards.length} recall cards reviewed
-                    </p>
-                  )}
                   {session.parkingLot?.length > 0 && (
                     <p className="text-sm text-tertiary" style={{ marginTop: 'var(--space-1)' }}>
                       {session.parkingLot.length} parked thoughts captured

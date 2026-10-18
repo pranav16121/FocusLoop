@@ -2,7 +2,7 @@ import { packSessions } from './packer.js';
 
 // Bridges the local planner and the server-side Gemini planner.
 // Output always uses the same plan shape as buildStudyPlan, so editing, drag/drop,
-// recall and revision work the same for AI and offline plans.
+// and revision reminders work the same for AI and offline plans.
 
 export const AI_EXCERPT_BUDGET = 6000;
 const MAX_AI_TOPICS = 30;
