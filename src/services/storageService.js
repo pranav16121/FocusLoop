@@ -184,6 +184,10 @@ const DEFAULT_SETTINGS = {
   contextSnapshotInterval: 300,
   mode: 'local',
   energy: 'medium',
+  visualFocusEnabled: false,
+  visualInferenceFps: 3,
+  visualSensitivity: 'balanced',
+  trustedSites: [],
 };
 
 export function getSettings() {

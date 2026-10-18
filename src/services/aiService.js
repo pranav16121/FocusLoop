@@ -29,8 +29,32 @@ async function fetchAPI(endpoint, data, timeout = 4000) {
   }
 }
 
-export async function generateStudyPlan(materialText, options = {}) {
-  return fetchAPI('/study-plan', { materialText, options }, 30000);
+export const AI_FALLBACK_MESSAGE = 'AI is busy, using the offline planner.';
+
+// The only client call that reaches Gemini. Never throws; never runs in Local mode.
+export async function planWithAI(request, { timeout = 20000 } = {}) {
+  if (!getSettings().aiEnabled) {
+    return { ok: false, reason: 'local', message: 'Local mode is on, using the offline planner.' };
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(`${API_BASE}/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.plan) {
+      return { ok: false, reason: data?.error || `http_${response.status}`, message: AI_FALLBACK_MESSAGE };
+    }
+    return { ok: true, plan: data.plan, cached: Boolean(data.cached) };
+  } catch {
+    return { ok: false, reason: 'network', message: AI_FALLBACK_MESSAGE };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // Client-side fallback when backend is unavailable

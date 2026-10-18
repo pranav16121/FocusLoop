@@ -1,7 +1,8 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
-import { generateTaskBreakdown, generateStudyPlan } from './services/aiService';
+import { generateTaskBreakdown, planWithAI } from './services/aiService';
 import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
+import { buildAiPlanRequest, planFromAi, aiTopicToStep } from './engine/aiPlan';
 import { ingestFile } from './engine/ingest';
 import { getSettings } from './services/storageService';
 import Header from './components/Header';
@@ -22,6 +23,13 @@ import ExamPlanner from './components/ExamPlanner';
 
 function App() {
   const session = useSessionManager();
+  const [planNotice, setPlanNotice] = useState('');
+
+  useEffect(() => {
+    if (!planNotice) return undefined;
+    const id = setTimeout(() => setPlanNotice(''), 6000);
+    return () => clearTimeout(id);
+  }, [planNotice]);
 
   // Apply theme on mount
   useEffect(() => {
@@ -55,39 +63,45 @@ function App() {
     }
   }, [session]);
 
+  // Offline planner: local chunker/packer only, zero network calls.
   const handleStartMaterial = useCallback((materialText, duration = 20, options = {}) => {
     const plan = buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText: options.syllabusText });
-    session.startNewTask('Study imported material', duration, {
-      studyPlan: { ...plan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null },
-    });
-    return generateStudyPlan(materialText, { duration, syllabusText: options.syllabusText }).then((aiPlan) => {
-      const nextPlan = aiPlan ? { ...plan, ...aiPlan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null } : plan;
-      const steps = aiPlan?.topics?.map(topic => ({
-        ...topic,
-        title: topic.title,
-        description: topic.description,
-        completed: false,
-      })) || plan.topics.map(topicToStep);
-      session.setBreakdownSteps(steps.length > 0 ? steps : [{
-        title: 'Review imported material',
-        description: 'Read the material and identify the first concept to study.',
-        estimatedMinutes: duration,
-        completed: false,
-      }]);
-      session.updateStudyPlan(nextPlan);
-    });
+    const studyPlan = { ...plan, syllabusText: options.syllabusText || '', examDate: options.examDate || '', hoursPerDay: options.hoursPerDay || null };
+    session.startNewTask(options.title || 'Study imported material', duration, { studyPlan });
+    const steps = plan.topics.map(topicToStep);
+    session.setBreakdownSteps(steps.length > 0 ? steps : [{
+      title: 'Review imported material',
+      description: 'Read the material and identify the first concept to study.',
+      estimatedMinutes: duration,
+      completed: false,
+    }]);
+    session.updateStudyPlan(studyPlan);
   }, [session]);
 
-  const handleStartMaterialFile = useCallback(async (file, duration = 20, options = {}) => {
-    const materialText = await ingestFile(file);
-    return handleStartMaterial(materialText, duration, options);
-  }, [handleStartMaterial]);
-
-  const handleStartMaterialFiles = useCallback(async (files, duration = 20, options = {}) => {
+  // Reads uploaded files locally and returns their text for the material box.
+  const handleIngestFiles = useCallback(async (files) => {
     const materials = await Promise.all(files.map(file => ingestFile(file)));
-    const combinedMaterial = materials.map((text, index) => `# File ${index + 1}\n${text}`).join('\n\n');
-    return handleStartMaterial(combinedMaterial, duration, options);
-  }, [handleStartMaterial]);
+    return materials.length === 1 ? materials[0] : materials.map((text, index) => `# File ${index + 1}\n${text}`).join('\n\n');
+  }, []);
+
+  // "Plan with AI": the only path that sends data to Gemini. Falls back to the offline planner.
+  const handlePlanWithAI = useCallback(async ({ topic = '', materialText = '', duration = 20, examDate = '', syllabusText = '', hoursPerDay = null }) => {
+    const localPlan = materialText ? buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText }) : null;
+    const result = await planWithAI(buildAiPlanRequest({ topic, sessionMinutes: duration, examDate, localPlan }));
+    const plan = result.ok ? planFromAi(result.plan, { sessionMinutes: duration, localPlan }) : null;
+
+    if (!plan) {
+      setPlanNotice(result.message || 'AI is busy, using the offline planner.');
+      if (materialText) handleStartMaterial(materialText, duration, { syllabusText, examDate, hoursPerDay, title: topic || undefined });
+      else handleStartTask(topic, duration);
+      return;
+    }
+
+    const studyPlan = { ...plan, syllabusText, examDate, hoursPerDay };
+    session.startNewTask(topic || 'Study imported material', duration, { studyPlan });
+    session.setBreakdownSteps(plan.topics.map(item => (item.nextAction ? aiTopicToStep(item) : topicToStep(item))));
+    session.updateStudyPlan(studyPlan);
+  }, [session, handleStartMaterial, handleStartTask]);
 
   // Handle step completion
   const handleCompleteStep = useCallback(() => {
@@ -161,8 +175,8 @@ function App() {
           <HomeScreen
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
-            onStartMaterialFile={handleStartMaterialFile}
-            onStartMaterialFiles={handleStartMaterialFiles}
+            onIngestFiles={handleIngestFiles}
+            onPlanWithAI={handlePlanWithAI}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}
@@ -302,8 +316,8 @@ function App() {
           <HomeScreen
             onStartTask={handleStartTask}
             onStartMaterial={handleStartMaterial}
-            onStartMaterialFile={handleStartMaterialFile}
-            onStartMaterialFiles={handleStartMaterialFiles}
+            onIngestFiles={handleIngestFiles}
+            onPlanWithAI={handlePlanWithAI}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}
@@ -320,6 +334,7 @@ function App() {
         onSettingsClick={session.showSettings}
       />
       <main className="main-content">
+        {planNotice && <div className="plan-notice" role="status">{planNotice}</div>}
         {renderView()}
       </main>
     </div>

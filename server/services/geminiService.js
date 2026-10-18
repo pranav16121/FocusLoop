@@ -1,69 +1,96 @@
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+import { GoogleGenAI } from '@google/genai';
+import { PLAN_JSON_SCHEMA, validatePlan } from './planSchema.js';
 
-function getApiKey() {
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  return process.env.GEMINI_API_KEY;
+// Server-only Gemini planner. The API key is read from env and never sent to the browser.
+export const TIMEOUT_MS = 15000;
+export const MAX_OUTPUT_TOKENS = 2048;
+
+export class PlanError extends Error {
+  constructor(code, message) {
+    super(message || code);
+    this.code = code;
+  }
+}
+
+const SYSTEM_INSTRUCTION = `You are a study planner inside FocusLoop, a calm focus app.
+Plans are small, concrete and realistic. Never invent facts about the learner's material.
+Each nextAction is ONE physical micro-action that takes under 2 minutes to start, begins with a verb, and is under 20 words.
+Respond only with JSON matching the provided schema.`;
+
+export function buildPrompt({ topic, sessionMinutes, examDate, excerpts = [] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const exam = examDate ? `Exam date: ${examDate} (today is ${today}). Prioritise high-yield topics.` : '';
+  if (excerpts.length > 0) {
+    const sections = excerpts.map(item => `[${item.id}] ${item.title}\n${item.excerpt}`).join('\n\n');
+    return `The learner's material was split into the sections below${topic ? ` for the goal "${topic}"` : ''}.
+For EVERY section return one topic with the SAME id, a clearer title, a realistic estimatedMinutes, and one concrete nextAction.
+Do not add, merge or drop ids. Focus sessions are ${sessionMinutes} minutes long. ${exam}
+
+${sections}`;
+  }
+  return `Build a study plan for: "${topic}".
+Return 3-8 topics in a sensible learning order. Focus sessions are ${sessionMinutes} minutes long, so keep each topic between 5 and ${Math.max(10, sessionMinutes)} minutes. ${exam}`;
 }
 
 function parseJson(text) {
-  const cleaned = String(text || '').replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Gemini returned no JSON');
-  return JSON.parse(jsonMatch[0]);
+  try {
+    return JSON.parse(String(text || '').replace(/^```(?:json)?\s*|```\s*$/g, '').trim());
+  } catch {
+    return null;
+  }
 }
 
-export async function generateStudyPlan(materialText, options = {}) {
-  const apiKey = getApiKey();
-  const prompt = `Read the study material below and create a focused study plan. Identify the most important concepts, what the learner should understand or practice, and a sensible order. Be accurate to the material; do not invent facts. Keep the plan to 3-12 topics.
-
-Return ONLY valid JSON in this shape:
-{
-  "summary": "2-4 sentence plain-language summary of what this material covers",
-  "studyAdvice": "1-3 sentences about how to study it effectively",
-  "topics": [
-    {
-      "title": "Concept or skill",
-      "description": "What to learn or practice",
-      "estimatedMinutes": 15,
-      "type": "THEORY",
-      "complexity": 3,
-      "importance": 5,
-      "nextAction": "One concrete first action"
-    }
-  ]
-}
-
-Use one of these topic types: THEORY, DEFINITION, DERIVATION, EXAMPLE, PRACTICE, REVIEW.
-Available session duration: ${Number(options.duration) || 20} minutes.
-${options.syllabusText ? `Additional syllabus or exam context:\n${options.syllabusText}\n` : ''}
-Study material:\n${materialText}`;
-
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-    }),
+async function callOnce(ai, model, prompt, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new PlanError('timeout', 'Gemini did not answer in time'));
+    }, timeoutMs);
   });
+  try {
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseJsonSchema: PLAN_JSON_SCHEMA,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          abortSignal: controller.signal,
+        },
+      }),
+      timeout,
+    ]);
+    return response?.text;
+  } catch (error) {
+    if (error instanceof PlanError) throw error;
+    if (error?.status === 429) throw new PlanError('rate_limited', 'Gemini quota reached');
+    if (error?.name === 'AbortError') throw new PlanError('timeout', 'Gemini did not answer in time');
+    throw new PlanError('upstream', `Gemini request failed${error?.status ? ` (${error.status})` : ''}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
-  const payload = await response.json();
-  const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('');
-  const result = parseJson(text);
-  if (!Array.isArray(result.topics) || result.topics.length === 0) throw new Error('Gemini returned no study topics');
-  return {
-    summary: String(result.summary || '').trim(),
-    studyAdvice: String(result.studyAdvice || '').trim(),
-    topics: result.topics.slice(0, 12).map((topic, index) => ({
-      title: String(topic.title || `Topic ${index + 1}`).trim(),
-      description: String(topic.description || 'Review this concept from the imported material.').trim(),
-      estimatedMinutes: Math.min(180, Math.max(1, Number(topic.estimatedMinutes) || 10)),
-      type: String(topic.type || 'THEORY').toUpperCase(),
-      complexity: Math.min(5, Math.max(1, Number(topic.complexity) || 3)),
-      importance: Math.min(5, Math.max(1, Number(topic.importance) || 3)),
-      nextAction: String(topic.nextAction || 'Write down what you remember before checking the material.').trim(),
-    })),
-    mode: 'gemini',
-  };
+// One call, plus exactly one retry if the output is not valid plan JSON.
+// Rate limits, timeouts and upstream errors are never retried.
+export async function generatePlan(request, { client, model, timeoutMs = TIMEOUT_MS } = {}) {
+  const modelName = model || process.env.GEMINI_MODEL;
+  if (!client && !process.env.GEMINI_API_KEY) throw new PlanError('no_key', 'GEMINI_API_KEY is not set');
+  if (!modelName) throw new PlanError('no_model', 'GEMINI_MODEL is not set');
+  const ai = client || new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const prompt = buildPrompt(request);
+  const ids = request.excerpts?.length ? request.excerpts.map(item => item.id) : undefined;
+  const deadline = Date.now() + timeoutMs;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const remaining = deadline - Date.now();
+    if (remaining < 500) throw new PlanError('timeout', 'Gemini did not answer in time');
+    const plan = validatePlan(parseJson(await callOnce(ai, modelName, prompt, remaining)), { ids });
+    if (plan) return plan;
+  }
+  throw new PlanError('bad_output', 'Gemini returned an invalid plan');
 }

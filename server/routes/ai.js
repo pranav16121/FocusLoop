@@ -1,23 +1,14 @@
 import { Router } from 'express';
 import { generateBreakdown, generateNextAction, generateContext, generateReflection, generateAdaptivePlan } from '../services/anthropicService.js';
-import { generateStudyPlan } from '../services/geminiService.js';
 import { demoBreakdown, demoNextAction, demoContext, demoReflection, demoAdaptivePlan } from '../services/demoService.js';
+import planRouter from './plan.js';
 
 const router = Router();
 
-const isAIAvailable = () => !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY);
+// Gemini is only reached through POST /plan (the explicit "Plan with AI" button).
+const isAIAvailable = () => !!process.env.ANTHROPIC_API_KEY;
 
-router.post('/study-plan', async (req, res) => {
-  try {
-    const { materialText, options } = req.body;
-    if (!materialText) return res.status(400).json({ error: 'Study material is required' });
-    if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'Gemini is not configured' });
-    res.json(await generateStudyPlan(materialText, options));
-  } catch (err) {
-    console.error('Gemini study-plan failed:', err.message);
-    res.status(502).json({ error: 'Failed to generate a Gemini study plan' });
-  }
-});
+router.use(planRouter);
 
 router.post('/breakdown', async (req, res) => {
   try {

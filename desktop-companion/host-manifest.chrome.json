@@ -1,0 +1,7 @@
+{
+  "name": "com.focusloop.companion",
+  "description": "FocusLoop local foreground application companion",
+  "path": "__HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__CHROME_EXTENSION_ID__/"]
+}
