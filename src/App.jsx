@@ -2,7 +2,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { useSessionManager, SESSION_STATES } from './hooks/useSessionManager';
 import { generateTaskBreakdown, planWithAI } from './services/aiService';
 import { buildStudyPlan, topicToStep } from './algorithms/studyEngine';
-import { buildAiPlanRequest, planFromAi, aiTopicToStep } from './engine/aiPlan';
+import { buildAiPlanRequest, planFromAi, aiTopicToStep, describePlanChange } from './engine/aiPlan';
 import { ingestFile } from './engine/ingest';
 import { getSettings } from './services/storageService';
 import Header from './components/Header';
@@ -84,9 +84,18 @@ function App() {
   }, []);
 
   // "Plan with AI": the only path that sends data to Gemini. Falls back to the offline planner.
-  const handlePlanWithAI = useCallback(async ({ topic = '', materialText = '', duration = 20, examDate = '', syllabusText = '', hoursPerDay = null }) => {
+  // Step 1 of topic mode: a 6-10 item outline the user can edit before sessions are built.
+  const handlePlanOutline = useCallback(async ({ topic, duration = 20, examDate = '', level = '', goal = '', course = '' }) => {
+    const result = await planWithAI(buildAiPlanRequest({ mode: 'outline', topic, sessionMinutes: duration, examDate, level, goal, course }));
+    if (result.ok && result.outline?.length) return result.outline.map(item => item.title);
+    setPlanNotice(result.message || 'AI is busy, using the offline planner.');
+    handleStartTask(topic, duration);
+    return null;
+  }, [handleStartTask]);
+
+  const handlePlanWithAI = useCallback(async ({ topic = '', materialText = '', duration = 20, examDate = '', syllabusText = '', hoursPerDay = null, level = '', goal = '', course = '', outline = [] }) => {
     const localPlan = materialText ? buildStudyPlan(materialText, { sessionMinutes: duration, syllabusText }) : null;
-    const result = await planWithAI(buildAiPlanRequest({ topic, sessionMinutes: duration, examDate, localPlan }));
+    const result = await planWithAI(buildAiPlanRequest({ topic, sessionMinutes: duration, examDate, level, goal, course, outline, localPlan }));
     const plan = result.ok ? planFromAi(result.plan, { sessionMinutes: duration, localPlan }) : null;
 
     if (!plan) {
@@ -96,11 +105,29 @@ function App() {
       return;
     }
 
-    const studyPlan = { ...plan, syllabusText, examDate, hoursPerDay };
+    // aiContext lets the plan screen re-run with feedback using the same inputs.
+    const aiContext = { topic, duration, examDate, level, goal, course, localPlan };
+    const studyPlan = { ...plan, syllabusText, examDate, hoursPerDay, aiContext };
     session.startNewTask(topic || 'Study imported material', duration, { studyPlan });
     session.setBreakdownSteps(plan.topics.map(item => (item.nextAction ? aiTopicToStep(item) : topicToStep(item))));
     session.updateStudyPlan(studyPlan);
   }, [session, handleStartMaterial, handleStartTask]);
+
+  // Feedback buttons on the plan screen: re-run with one instruction; keep the current plan on failure.
+  const handlePlanFeedback = useCallback(async (feedback) => {
+    const current = session.studyPlan;
+    const context = current?.aiContext;
+    if (!context) return { ok: false, message: 'Feedback is only available for AI plans.' };
+    const result = await planWithAI(buildAiPlanRequest({
+      ...context, sessionMinutes: context.duration, feedback, previous: current.topics.map(item => item.title),
+    }));
+    const plan = result.ok ? planFromAi(result.plan, { sessionMinutes: context.duration, localPlan: context.localPlan }) : null;
+    if (!plan) return { ok: false, message: 'AI is busy, keeping your current plan.' };
+    const note = describePlanChange(current, plan, feedback);
+    session.setBreakdownSteps(plan.topics.map(item => (item.nextAction ? aiTopicToStep(item) : topicToStep(item))));
+    session.updateStudyPlan({ ...current, ...plan, aiContext: context, feedbackNote: note });
+    return { ok: true, message: note };
+  }, [session]);
 
   // Handle step completion
   const handleCompleteStep = useCallback(() => {
@@ -176,6 +203,7 @@ function App() {
             onStartMaterial={handleStartMaterial}
             onIngestFiles={handleIngestFiles}
             onPlanWithAI={handlePlanWithAI}
+            onPlanOutline={handlePlanOutline}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}
@@ -192,6 +220,7 @@ function App() {
             onStartFocus={handleStartFocus}
             onBack={() => session.goHome()}
             onUpdateSteps={(newSteps) => session.setBreakdownSteps(newSteps)}
+            onPlanFeedback={handlePlanFeedback}
             studyPlan={session.studyPlan}
           />
         );
@@ -309,6 +338,7 @@ function App() {
             onStartMaterial={handleStartMaterial}
             onIngestFiles={handleIngestFiles}
             onPlanWithAI={handlePlanWithAI}
+            onPlanOutline={handlePlanOutline}
             onContinueSession={session.continueLastSession}
             onStartRevision={handleStartRevision}
             onOpenPlanner={handleOpenPlanner}

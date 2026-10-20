@@ -46,10 +46,10 @@ export async function planWithAI(request, { timeout = 20000 } = {}) {
       signal: controller.signal,
     });
     const data = await response.json().catch(() => null);
-    if (!response.ok || !data?.plan) {
+    if (!response.ok || !(data?.plan || data?.outline)) {
       return { ok: false, reason: data?.error || `http_${response.status}`, message: AI_FALLBACK_MESSAGE };
     }
-    return { ok: true, plan: data.plan, cached: Boolean(data.cached) };
+    return { ok: true, plan: data.plan, outline: data.outline, cached: Boolean(data.cached) };
   } catch {
     return { ok: false, reason: 'network', message: AI_FALLBACK_MESSAGE };
   } finally {

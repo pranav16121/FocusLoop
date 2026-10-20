@@ -13,7 +13,8 @@
     "lint": "oxlint",
     "test": "node --test",
     "preview": "vite preview",
-    "extension:assets": "node extension/prepare-assets.mjs"
+    "extension:assets": "node extension/prepare-assets.mjs",
+    "eval:plan": "node tests/eval/run-eval.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

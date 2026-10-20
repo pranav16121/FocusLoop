@@ -1509,3 +1509,11 @@ textarea.text-input {
 .home-options .energy-selector { justify-content: flex-start; margin: var(--space-2) 0 0; }
 .home-actions { display: flex; gap: var(--space-3); margin-top: var(--space-5, 20px); }
 .home-actions .btn { flex: 1; }
+.ai-context { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: var(--space-2); margin-top: var(--space-3); }
+.outline-editor { margin-top: var(--space-3); text-align: left; }
+.outline-list { margin: var(--space-2) 0; padding-left: var(--space-5, 20px); }
+.outline-item { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-1); }
+.outline-item .text-input { flex: 1; padding: 6px 10px; }
+.plan-feedback { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin: var(--space-3) 0; }
+.plan-feedback-note { width: 100%; text-align: center; margin-top: var(--space-1); }
+@media (max-width: 600px) { .ai-context { grid-template-columns: 1fr; } }

@@ -8,10 +8,16 @@ const DURATION_PRESETS = [10, 15, 20, 25, 30, 45, 60];
 
 const AI_NOTICE = 'Your topic and selected text are sent to Google Gemini to build this plan. Nothing is sent unless you click this.';
 
-export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles, onPlanWithAI, onContinueSession, onStartRevision, onOpenPlanner }) {
+export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles, onPlanWithAI, onPlanOutline, onContinueSession, onStartRevision, onOpenPlanner }) {
   const [aiEnabled] = useState(() => Boolean(getSettings().aiEnabled));
   const [showAiNotice, setShowAiNotice] = useState(false);
   const [isPlanningAI, setIsPlanningAI] = useState(false);
+  const [aiLevel, setAiLevel] = useState('');
+  const [aiGoal, setAiGoal] = useState('');
+  const [aiCourse, setAiCourse] = useState('');
+  // Topic mode is two-step: Gemini drafts an outline the user edits, then sessions are built from it.
+  const [outline, setOutline] = useState(null);
+  const [newOutlineItem, setNewOutlineItem] = useState('');
   const [taskInput, setTaskInput] = useState('');
   const [materialInput, setMaterialInput] = useState('');
   const [inputMode, setInputMode] = useState('task');
@@ -72,21 +78,59 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles
 
   const canPlanWithAI = inputMode === 'task' ? Boolean(taskInput.trim()) : Boolean(materialInput.trim());
 
+  const aiInputs = () => ({
+    topic: taskInput.trim(),
+    duration: customDuration ? Number(customDuration) : energyDuration,
+    examDate,
+    level: aiLevel,
+    goal: aiGoal,
+    course: aiCourse,
+  });
+
   const runPlanWithAI = async () => {
     setShowAiNotice(false);
     setIsPlanningAI(true);
     try {
+      if (inputMode === 'task' && onPlanOutline) {
+        const drafted = await onPlanOutline(aiInputs());
+        if (drafted) setOutline(drafted);
+        return;
+      }
       await onPlanWithAI({
-        topic: taskInput.trim(),
+        ...aiInputs(),
         materialText: inputMode === 'material' ? materialInput.trim() : '',
-        duration: customDuration ? Number(customDuration) : energyDuration,
-        examDate,
         syllabusText: inputMode === 'material' ? syllabusInput : '',
         hoursPerDay: Number(hoursPerDay) || null,
       });
     } finally {
       setIsPlanningAI(false);
     }
+  };
+
+  const handleBuildSessions = async () => {
+    const confirmed = (outline || []).map(item => item.trim()).filter(Boolean);
+    if (confirmed.length === 0) return;
+    setIsPlanningAI(true);
+    try {
+      await onPlanWithAI({ ...aiInputs(), outline: confirmed });
+    } finally {
+      setIsPlanningAI(false);
+    }
+  };
+
+  const updateOutline = (index, value) => setOutline(outline.map((item, i) => (i === index ? value : item)));
+  const removeOutline = (index) => setOutline(outline.filter((_, i) => i !== index));
+  const moveOutline = (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= outline.length) return;
+    const next = [...outline];
+    [next[index], next[target]] = [next[target], next[index]];
+    setOutline(next);
+  };
+  const addOutline = () => {
+    if (!newOutlineItem.trim()) return;
+    setOutline([...outline, newOutlineItem.trim()]);
+    setNewOutlineItem('');
   };
 
   const handlePlanWithAIClick = () => {
@@ -180,7 +224,7 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles
               className="text-input text-input-lg"
               placeholder="What are you trying to work on?"
               value={taskInput}
-              onChange={(e) => setTaskInput(e.target.value)}
+              onChange={(e) => { setTaskInput(e.target.value); setOutline(null); }}
               aria-label="What are you trying to work on?"
               autoFocus
             />
@@ -268,6 +312,49 @@ export default function HomeScreen({ onStartTask, onStartMaterial, onIngestFiles
             </button>
           )}
         </div>
+
+        {aiEnabled && (
+          <div className="ai-context" aria-label="Optional context for Plan with AI">
+            <select className="select" value={aiLevel} onChange={(e) => setAiLevel(e.target.value)} aria-label="Level">
+              <option value="">Level (optional)</option>
+              <option value="new">New to this</option>
+              <option value="revising">Revising</option>
+            </select>
+            <select className="select" value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} aria-label="Goal">
+              <option value="">Goal (optional)</option>
+              <option value="exam">Exam</option>
+              <option value="understand">Understand</option>
+              <option value="interview">Interview prep</option>
+            </select>
+            <input className="text-input" type="text" maxLength={80} placeholder="Course or board (optional)" value={aiCourse} onChange={(e) => setAiCourse(e.target.value)} aria-label="Course or board" />
+          </div>
+        )}
+
+        {outline && inputMode === 'task' && (
+          <div className="card card-compact outline-editor" aria-label="Edit the outline before building sessions">
+            <div className="continue-label">Outline — edit, reorder, then build</div>
+            <ol className="outline-list">
+              {outline.map((item, index) => (
+                <li key={index} className="outline-item">
+                  <input className="text-input" value={item} onChange={(e) => updateOutline(index, e.target.value)} aria-label={`Outline item ${index + 1}`} />
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => moveOutline(index, -1)} aria-label="Move up" disabled={index === 0}>↑</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => moveOutline(index, 1)} aria-label="Move down" disabled={index === outline.length - 1}>↓</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeOutline(index)} aria-label="Delete item">✕</button>
+                </li>
+              ))}
+            </ol>
+            <div className="outline-item">
+              <input className="text-input" value={newOutlineItem} placeholder="Add a topic" onChange={(e) => setNewOutlineItem(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOutline(); } }} aria-label="New outline item" />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={addOutline}>Add</button>
+            </div>
+            <div className="home-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setOutline(null)} disabled={isPlanningAI}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={handleBuildSessions} disabled={isPlanningAI || outline.every(item => !item.trim())}>
+                {isPlanningAI ? 'Building...' : 'Build sessions'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {showAiNotice && (
           <div className="card card-compact ai-notice" role="dialog" aria-label="Plan with AI privacy notice">

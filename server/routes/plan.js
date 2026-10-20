@@ -1,26 +1,30 @@
-import { createHash } from 'node:crypto';
 import { Router } from 'express';
-import { generatePlan } from '../services/geminiService.js';
-import { sanitizePlanRequest } from '../services/planSchema.js';
+import { generateOutline, generatePlan } from '../services/geminiService.js';
+import { sanitizePlanRequest, planCacheKey } from '../services/planSchema.js';
 
 // POST /api/ai/plan — the only route that sends data to Gemini.
+// mode "outline" drafts a 6-10 item outline; mode "plan" builds sessions (topic, outline, or material).
+// Outline, build and feedback re-runs each count toward the per-IP rate limit and the daily guard.
 const router = Router();
 
-const MAX_BODY_BYTES = 10 * 1024;
+const MAX_BODY_BYTES = 12 * 1024;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
-const RATE_MAX_REQUESTS = 8;
+const RATE_MAX_REQUESTS = 12;
+const DAILY_LIMIT = Number(process.env.GEMINI_DAILY_LIMIT) || 200;
 
 const cache = new Map();
 const hits = new Map();
+const daily = { day: '', count: 0 };
 
-const STATUS_BY_CODE = { no_key: 503, no_model: 503, ai_off: 503, rate_limited: 429, timeout: 504, bad_output: 502, upstream: 502 };
+const STATUS_BY_CODE = { no_key: 503, no_model: 503, ai_off: 503, rate_limited: 429, daily_limit: 429, timeout: 504, bad_output: 502, upstream: 502 };
 const MESSAGE_BY_CODE = {
   no_key: 'AI is not set up on the server.',
   no_model: 'AI is not set up on the server.',
   ai_off: 'AI planning is turned off on the server.',
   rate_limited: 'AI is busy right now.',
+  daily_limit: 'The daily AI limit has been reached.',
   timeout: 'AI took too long to answer.',
   bad_output: 'AI returned an unusable plan.',
   upstream: 'AI is unavailable right now.',
@@ -28,21 +32,16 @@ const MESSAGE_BY_CODE = {
 
 const sendError = (res, code) => res.status(STATUS_BY_CODE[code] || 502).json({ error: code, message: MESSAGE_BY_CODE[code] || MESSAGE_BY_CODE.upstream });
 
-function cacheKey(input) {
-  // Topic + length (+ exam date and excerpts, so different material never shares a plan).
-  return createHash('sha256').update(JSON.stringify([input.topic.toLowerCase(), input.sessionMinutes, input.examDate, input.excerpts])).digest('hex');
-}
-
 function readCache(key) {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.at > CACHE_TTL_MS) { cache.delete(key); return null; }
-  return entry.plan;
+  return entry.value;
 }
 
-function writeCache(key, plan) {
+function writeCache(key, value) {
   if (cache.size >= CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
-  cache.set(key, { plan, at: Date.now() });
+  cache.set(key, { value, at: Date.now() });
 }
 
 function isRateLimited(ip) {
@@ -54,6 +53,15 @@ function isRateLimited(ip) {
   return false;
 }
 
+// Server-wide cap on Gemini requests per UTC day.
+function isOverDailyLimit() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (daily.day !== today) { daily.day = today; daily.count = 0; }
+  if (daily.count >= DAILY_LIMIT) return true;
+  daily.count += 1;
+  return false;
+}
+
 router.post('/plan', async (req, res) => {
   if ((process.env.AI_PROVIDER || 'gemini').toLowerCase() !== 'gemini') return sendError(res, 'ai_off');
   if (Buffer.byteLength(JSON.stringify(req.body || {})) > MAX_BODY_BYTES) {
@@ -62,18 +70,19 @@ router.post('/plan', async (req, res) => {
   const input = sanitizePlanRequest(req.body);
   if (!input) return res.status(400).json({ error: 'invalid', message: 'A topic or material excerpts are required.' });
 
-  const key = cacheKey(input);
+  const key = planCacheKey(input);
   const cached = readCache(key);
-  if (cached) return res.json({ plan: cached, cached: true });
+  if (cached) return res.json({ ...cached, cached: true });
 
   if (isRateLimited(req.ip || 'unknown')) return sendError(res, 'rate_limited');
+  if (isOverDailyLimit()) return sendError(res, 'daily_limit');
 
   try {
-    const plan = await generatePlan(input);
-    writeCache(key, plan);
-    res.json({ plan, cached: false });
+    const value = input.mode === 'outline' ? await generateOutline(input) : { plan: await generatePlan(input) };
+    writeCache(key, value);
+    res.json({ ...value, cached: false });
   } catch (error) {
-    console.error(`Gemini plan failed: ${error.code || 'upstream'} ${error.message}`);
+    console.error(`Gemini ${input.mode} failed: ${error.code || 'upstream'} ${error.message}`);
     sendError(res, error.code);
   }
 });
