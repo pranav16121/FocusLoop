@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTimer } from '../hooks/useTimer';
+import { clockRemaining } from '../engine/sessionClock';
 import { useDriftDetection } from '../hooks/useDriftDetection';
 import { getLocalNextAction } from '../algorithms/studyEngine';
 import { getSettings } from '../services/storageService';
+import { useVisualFocus } from '../hooks/useVisualFocus';
 
 export default function FocusSession({
   task,
@@ -18,6 +20,7 @@ export default function FocusSession({
   isPaused,
   interruptionCount,
   elapsedSeconds,
+  sessionStartTime,
   referenceMode,
   onToggleReferenceMode,
   parkingLot,
@@ -45,10 +48,20 @@ export default function FocusSession({
 
   const timer = useTimer(sessionDuration * 60, handleTimerComplete);
   const drift = useDriftDetection(!isPaused && timer.isRunning, { referenceMode });
+  const visual = useVisualFocus({
+    active: !isPaused && timer.isRunning,
+    paused: isPaused,
+    referenceMode,
+    onRecovery: (data) => onDrift((interruptionCount || 0) + 1, { ...data, elapsed: elapsedRef.current }),
+  });
 
-  // Start timer on mount
+  // Start timer on mount from the session clock (start timestamp), not from zero:
+  // remounting after a drift card or "Where was I?" must keep the elapsed time.
   useEffect(() => {
-    timer.start(Math.max(0, (sessionDuration * 60) - (elapsedSeconds || 0)));
+    const clock = sessionStartTime && !isPaused
+      ? { startTime: sessionStartTime, pausedElapsed: null }
+      : { startTime: null, pausedElapsed: elapsedSeconds || 0 };
+    timer.start(clockRemaining(clock, sessionDuration * 60));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track elapsed
@@ -68,7 +81,8 @@ export default function FocusSession({
   useEffect(() => {
     if (drift.isDrifting && drift.driftData) {
       timer.pause();
-      onDrift(drift.interruptionCount, { ...drift.driftData, elapsed: elapsedRef.current });
+      // The drift hook's own counter restarts on remount; the session count is the source of truth.
+      onDrift((interruptionCount || 0) + 1, { ...drift.driftData, elapsed: elapsedRef.current });
     }
   }, [drift.isDrifting, drift.driftData]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -161,6 +175,13 @@ export default function FocusSession({
       </div>
 
       {referenceMode && <div className="reference-mode-banner" role="status">Reference Mode is on. You can look things up without a return prompt.</div>}
+      {getSettings().visualFocusEnabled && <div className="visual-panel">
+        {visual.stream && <video className="visual-preview" autoPlay muted playsInline ref={el => { if (el && el.srcObject !== visual.stream) el.srcObject = visual.stream; }} />}
+        <div>
+          <div className="visual-status" role="status"><span className={visual.status === 'monitoring' ? 'status-dot active' : 'status-dot'} /> Visual Focus Assist: {visual.status.replaceAll('-', ' ')} · Camera {visual.camera} · Companion {visual.companion}{visual.error ? ` · ${visual.error}` : ''}</div>
+          {visual.live && <div className={`visual-live ${visual.live.face && !visual.live.turned ? 'ok' : 'away'}`}>{!visual.live.face ? 'No face detected' : visual.live.turned ? 'Head turned away' : 'Focused'}{visual.live.away > 0 ? ` · ${visual.live.away}s` : ''}</div>}
+        </div>
+      </div>}
 
       <div className="focus-action-checklist" aria-label="Micro-action checklist">
         <p className="text-sm text-secondary">Next tiny actions</p>

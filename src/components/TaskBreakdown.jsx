@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { packSessions } from '../algorithms/studyEngine';
+import { FEEDBACK_OPTIONS } from '../engine/aiPlan';
 
 function buildGroups(steps, sessionDuration) {
   const packed = packSessions(steps.map((step, index) => ({
@@ -18,7 +19,20 @@ function topicId(step, index) {
   return step.topicId || `step-${index}`;
 }
 
-export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps, studyPlan }) {
+export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps, studyPlan, onPlanFeedback }) {
+  const [feedbackBusy, setFeedbackBusy] = useState('');
+  const [feedbackNote, setFeedbackNote] = useState('');
+
+  const handleFeedback = async (feedback) => {
+    setFeedbackBusy(feedback);
+    try {
+      const result = await onPlanFeedback(feedback);
+      setFeedbackNote(result.message);
+    } finally {
+      setFeedbackBusy('');
+    }
+  };
+
   const [revealedCount, setRevealedCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editValue, setEditValue] = useState('');
@@ -156,6 +170,17 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
       <p className="text-sm text-tertiary text-center">Your study plan</p>
       <h2 className="heading-2 text-center">{task}</h2>
       <p className="text-center text-secondary plan-intro">Shape the plan until it feels startable.</p>
+
+      {!isLoading && studyPlan?.aiContext && onPlanFeedback && (
+        <div className="plan-feedback" role="group" aria-label="Adjust this AI plan">
+          {FEEDBACK_OPTIONS.map(option => (
+            <button key={option.id} type="button" className="chip" disabled={Boolean(feedbackBusy)} onClick={() => handleFeedback(option.id)}>
+              {feedbackBusy === option.id ? 'Updating...' : option.label}
+            </button>
+          ))}
+          {feedbackNote && <p className="text-sm text-secondary plan-feedback-note" role="status">{feedbackNote}</p>}
+        </div>
+      )}
 
       {!isLoading && studyPlan?.summary && (
         <div className="card card-compact plan-ai-summary">

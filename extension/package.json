@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": { "prepare-assets": "node prepare-assets.mjs" },
+  "dependencies": { "@mediapipe/tasks-vision": "1.1.1" }
+}

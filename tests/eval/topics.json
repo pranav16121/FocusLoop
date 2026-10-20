@@ -1,0 +1,12 @@
+[
+  { "topic": "Kirchhoff's laws", "sessionMinutes": 25, "level": "new", "goal": "exam", "course": "VTU first-year BEE" },
+  { "topic": "Causes of the French Revolution", "sessionMinutes": 20, "level": "new", "goal": "understand" },
+  { "topic": "Time and work aptitude problems", "sessionMinutes": 15, "level": "revising", "goal": "interview" },
+  { "topic": "Ohm's law and resistor networks", "sessionMinutes": 20, "level": "new", "goal": "exam", "material": "# Ohm's law\nVoltage across a resistor equals current times resistance, V = IR. Resistance is measured in ohms.\n\n# Series resistors\nResistors in series carry the same current; the equivalent resistance is the sum R = R1 + R2 + R3.\n\n# Parallel resistors\nResistors in parallel share the same voltage; 1/R = 1/R1 + 1/R2. Two equal resistors in parallel give half the resistance.\n\n# Power\nElectrical power P = VI = I^2 R = V^2 / R, measured in watts." },
+  { "topic": "Binary search trees", "sessionMinutes": 30, "level": "revising", "goal": "interview" },
+  { "topic": "Photosynthesis", "sessionMinutes": 20, "level": "new", "goal": "exam", "course": "CBSE Class 10" },
+  { "topic": "Integration by parts", "sessionMinutes": 25, "level": "new", "goal": "exam" },
+  { "topic": "Supply and demand", "sessionMinutes": 20, "level": "new", "goal": "understand" },
+  { "topic": "SQL joins", "sessionMinutes": 20, "level": "revising", "goal": "interview" },
+  { "topic": "Newton's laws of motion", "sessionMinutes": 20, "level": "new", "goal": "exam", "material": "# First law\nAn object stays at rest or in uniform motion unless acted on by a net external force. This property is inertia.\n\n# Second law\nNet force equals mass times acceleration, F = ma. Force is measured in newtons.\n\n# Third law\nFor every action there is an equal and opposite reaction; the forces act on different bodies." }
+]

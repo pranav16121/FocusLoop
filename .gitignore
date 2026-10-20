@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+extension/vendor/
+extension/models/*.task
 dist
 dist-ssr
 *.local
@@ -27,3 +29,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Copied from node_modules on install
+public/vision/wasm/

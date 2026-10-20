@@ -134,7 +134,7 @@ export default function ContextRecovery({
           </button>
           <button 
             className="btn btn-secondary" 
-            onClick={onReset}
+            onClick={() => { if (window.confirm('Restart the timer from the beginning? Your elapsed time will be lost.')) onReset(); }}
             title="Forget the interruption and restart clean"
           >
             Reset & restart
