@@ -144,6 +144,11 @@ export function useSessionManager() {
     setIsLoading(false);
     persistState(SESSION_STATES.BREAKDOWN, { steps: newSteps });
   }, [persistState]);
+
+  const updateStudyPlan = useCallback((nextPlan) => {
+    setStudyPlan(nextPlan);
+    persistState(undefined, { studyPlan: nextPlan });
+  }, [persistState]);
   
   const startFocus = useCallback((durationOverride) => {
     const nextDuration = durationOverride || sessionDuration;
@@ -374,6 +379,7 @@ export function useSessionManager() {
     },
     startNewTask,
     setBreakdownSteps,
+    updateStudyPlan,
     startFocus,
     pauseSession,
     resumeSession,

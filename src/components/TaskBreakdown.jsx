@@ -18,7 +18,7 @@ function topicId(step, index) {
   return step.topicId || `step-${index}`;
 }
 
-export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps }) {
+export default function TaskBreakdown({ task, steps, sessionDuration, isLoading, onStartFocus, onBack, onUpdateSteps, studyPlan }) {
   const [revealedCount, setRevealedCount] = useState(0);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [editValue, setEditValue] = useState('');
@@ -157,6 +157,15 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
       <h2 className="heading-2 text-center">{task}</h2>
       <p className="text-center text-secondary plan-intro">Shape the plan until it feels startable.</p>
 
+      {!isLoading && studyPlan?.summary && (
+        <div className="card card-compact plan-ai-summary">
+          <div className="continue-label">What to study</div>
+          <p>{studyPlan.summary}</p>
+          {studyPlan.studyAdvice && <p className="text-sm text-secondary">{studyPlan.studyAdvice}</p>}
+          {studyPlan.mode === 'gemini' && <span className="badge badge-accent">Gemini study summary</span>}
+        </div>
+      )}
+
       {!isLoading && steps.length > 0 && (
         <div className="plan-summary">
           <span className="badge badge-accent">{steps.length} topics</span>
@@ -167,7 +176,7 @@ export default function TaskBreakdown({ task, steps, sessionDuration, isLoading,
       {isLoading ? (
         <div className="plan-loading">
           <div className="loading-dots"><div className="loading-dot" /><div className="loading-dot" /><div className="loading-dot" /></div>
-          <p className="text-sm text-tertiary">Building your local study plan...</p>
+          <p className="text-sm text-tertiary">Reading your material and building a study plan...</p>
         </div>
       ) : (
         <>
